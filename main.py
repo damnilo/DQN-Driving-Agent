@@ -7,9 +7,9 @@ ENV_CONFIG = {
         "use_render": True,
         "manual_control": False,
         "traffic_density": 0.1,
-        "num_scenarios": 100,
+        "num_scenarios": 500,
         "start_seed": 0,
-        "map": "SSSS",
+        "map": 4,
         # "daytime": random.choice(["08:00", "12:00", "17:30", "20:00"]),
         "accident_prob": 0.0,
         "vehicle_config": {

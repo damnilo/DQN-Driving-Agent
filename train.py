@@ -15,9 +15,9 @@ ENV_CONFIG = {
         "use_render": False,
         "manual_control": False,
         "traffic_density": 0.1,
-        "num_scenarios": 100,
+        "num_scenarios": 500,
         "start_seed": 0,
-        "map": "SSSS",
+        "map": 4,
         # "daytime": random.choice(["08:00", "12:00", "17:30", "20:00"]),
         "accident_prob": 0.0,
         "vehicle_config": {
@@ -32,11 +32,11 @@ ENV_CONFIG = {
 }
 
 TRAIN_CONFIG = {
-    "num_episodes": 1000,
+    "num_episodes": 3000,
     "batch_size": 128,
     "gamma" : 0.99,
     "lr": 3e-4,
-    "replay_capacity": 100_000,
+    "replay_capacity": 200_000,
     "min_replay_size": 2_000,
     "target_update_freq": 500
 }
@@ -47,7 +47,7 @@ EXPERT_DATASET = "dataset/expert_dataset.json"
 EPSILON_CONFIG = {
     "start": 1.0,
     "end": 0.05,
-    "decay": 50_000,
+    "decay": 150_000,
     "warmup_steps": 1_000
 }
 
@@ -104,6 +104,7 @@ def main():
 
     try: 
         for episode in range(TRAIN_CONFIG["num_episodes"]):
+            trainer.set_map(episode);
             trainer.run_episode(episode)
 
             if (episode+1) % EVAL_FREQ == 0:

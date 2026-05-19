@@ -17,6 +17,14 @@ class Trainer:
 
         self.global_step = 0
 
+    def set_map(self, episode):
+        if episode < 300:
+            self.env.config["map"] = "SSSS"
+        elif episode < 600:
+            self.env.config["map"] = 3
+        else:
+            self.env.config["map"] = 5
+
     def train(self, num_episodes):
 
         for episode in range(num_episodes):

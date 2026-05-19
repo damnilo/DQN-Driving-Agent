@@ -2,6 +2,9 @@ class RewardFunction:
     LANE_WIDTH = 2.0
     MAX_HEADING_ERR = 1.0
 
+    def __init__(self):
+        self.prev_steering = 0.0
+
     def compute(self, info):
         reward = 0
         
@@ -20,6 +23,7 @@ class RewardFunction:
         reward += self.goal_reward(info)
         reward += self.action_smoothing_penalty(info)
         reward += self.heading_penalty(info)
+        reward += self.lateral_penalty(info)
 
         return reward
     
@@ -30,8 +34,11 @@ class RewardFunction:
         return 0.0
     
     def forward_reward(self, info):
+        speed = info.get("speed", 0.0)
+        heading_err = abs(info.get("heading_diff", 0.0))
+        haeding_factor = max(0.0, 1.0 - heading_err)
         # Boosted slightly to reward progress more than just "sitting centered"
-        return info.get("speed", 0.00) * 0.03
+        return speed * haeding_factor * 0.03
     
     def lane_reward(self, info):
         lane_offset = abs(info.get("lateral", 0.0))
@@ -40,16 +47,22 @@ class RewardFunction:
         return (1.0 - (normalised)) * 1.5
     
     def action_smoothing_penalty(self, info):
-        # This was too high. -1.0 * steering is a huge penalty.
-        # Lowered to -0.1 so it discourages 'jitter' without stopping 'turning'.
-        return float(-0.1 * abs(info.get("steering", 0.0)))
+        return float(-0.3 * abs(info.get("steering", 0.0)))
     
     def heading_penalty(self, info):
         heading_err = abs(info.get("heading_diff", 0.0))
         normilised = min(heading_err / self.MAX_HEADING_ERR, 1.0)
 
-        return -0.5 * normilised
+        return -2.0 * normilised
+    
+    def lateral_penalty(self, info):
+        lateral = info.get("lateral", 0.0)
+        lateral_velocity = info.get("lateral_velocity", 0.0)
 
+        if (lateral * lateral_velocity) > 0:
+            return -1.0 * abs(lateral_velocity)
+        
+        return 0.0
 
     def goal_reward(self, info):
 

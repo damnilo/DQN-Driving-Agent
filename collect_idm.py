@@ -1,23 +1,25 @@
 import json
 import os
 import numpy as np
-
 from metadrive import MetaDriveEnv
 from metadrive.policy.expert_policy import ExpertPolicy
+from enviornments.metadrive_env import MetaDriveEnvWrapper
 from enviornments.observation_builder import ObservationBuilder
 from utils.env_randomizer import get_random_metadrive_config
 
 DATASET_PATH = "dataset/expert_dataset.json"
 
-NUM_EPISODES = 200
+NUM_EPISODES = 400
+
+RESTART_EVERY = 15
 
 ENV_CONFIG = {
         "use_render": False,
         "manual_control": False,
         "traffic_density": 0.1,
-        "num_scenarios": 100,
+        "num_scenarios": 500,
         "start_seed": 0,
-        "map": "SSSS",
+        "map": 4,
         # "daytime": random.choice(["08:00", "12:00", "17:30", "20:00"]),
         "accident_prob": 0.0,
         "vehicle_config": {
@@ -30,6 +32,17 @@ ENV_CONFIG = {
         "crash_object_done": True,       # Sudar sa objektom (ogradom, čunjem)
         "out_of_road_done": True,  
 }
+
+def reset_with_timeout(env, timeout=30):
+    # MetaDrive / Panda3D must be reset from the main interpreter thread.
+    # The previous threaded approach caused `signal only works in main thread`.
+    try:
+        return env.reset()
+    except Exception as e:
+        # If reset gets stuck or fails, let the caller handle restart.
+        print(f"env.reset() failed: {e}")
+        return None
+
 def make_json_safe(obj):
 
     if isinstance(obj, np.ndarray):
@@ -58,6 +71,22 @@ def main():
     dataset = []
 
     for episode in  range(NUM_EPISODES):
+
+        if episode % RESTART_EVERY == 0 and episode > 0:
+            print(f"Preventivni restart env-a na epizodi {episode}")
+            env.close()
+            env = MetaDriveEnv(ENV_CONFIG)
+
+        obs = reset_with_timeout(env);
+
+        if obs is None:
+            env.close()
+            env = MetaDriveEnv(ENV_CONFIG)
+            obs = reset_with_timeout(env)
+
+            if obs is None:
+                raise RuntimeError("Neuspesan reset nakon restartovanja env-a")
+            
         raw_obs, info = env.reset()
 
         done = False
