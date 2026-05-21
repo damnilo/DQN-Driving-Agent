@@ -9,21 +9,28 @@ class RewardFunction:
         reward = 0
         
         if info.get("out_of_road", False):
-            return -300.0
+            return -50.0
         
         if info.get("crash", False):
-            return -300.0
+            return -50.0
+        
+        speed_penalty = 0.0
+        speed = info.get("speed", 0.0)
+        if speed < 5.0:
+            speed_penalty -= 0.5
+        
         # 1. Add a small 'Existence' bonus. 
         # This makes every step alive worth something.
         reward += 0.1
 
-        reward += self.forward_reward(info)
-        reward += self.idle_penalty(info) # Renamed for clarity
-        reward += self.lane_reward(info)
+        reward += self.forward_reward(info) * 2.0
+        reward += self.lane_reward(info) * 0.5
         reward += self.goal_reward(info)
-        reward += self.action_smoothing_penalty(info)
-        reward += self.heading_penalty(info)
-        reward += self.lateral_penalty(info)
+        reward += self.heading_penalty(info) * 0.3
+        reward += self.action_smoothing_penalty(info) * 0.2
+        reward += self.lateral_penalty(info) * 0.2
+        reward += speed_penalty
+        reward += self.idle_penalty(info) * 0.3
 
         return reward
     
@@ -44,23 +51,30 @@ class RewardFunction:
         lane_offset = abs(info.get("lateral", 0.0))
         normalised = min(lane_offset / self.LANE_WIDTH, 1.0)
         # We give up to +0.8 here
-        return (1.0 - (normalised)) * 1.5
+        return (1.0 - (normalised)) * 0.7
     
     def action_smoothing_penalty(self, info):
-        return float(-0.3 * abs(info.get("steering", 0.0)))
+        steering = info.get("steering", 0.0)
+        heading_err = abs(info.get("heading_diff", 0.0))
+        
+        scale = max(0.05, 0.2 * (1.0 - heading_err * 1.5))
+        
+        penalty = abs(steering - self.prev_steering)
+        self.prev_steering = steering
+        return float(-scale * penalty)
     
     def heading_penalty(self, info):
         heading_err = abs(info.get("heading_diff", 0.0))
         normilised = min(heading_err / self.MAX_HEADING_ERR, 1.0)
 
-        return -2.0 * normilised
+        return -0.5 * normilised
     
     def lateral_penalty(self, info):
         lateral = info.get("lateral", 0.0)
         lateral_velocity = info.get("lateral_velocity", 0.0)
 
         if (lateral * lateral_velocity) > 0:
-            return -1.0 * abs(lateral_velocity)
+            return -0.2 * abs(lateral_velocity)
         
         return 0.0
 

@@ -12,3 +12,4 @@ utils/__pycache__/
 checkpoints/
 logs/
 dataset/expert_dataset.json
+training.zip

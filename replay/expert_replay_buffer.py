@@ -3,6 +3,7 @@ import random
 import numpy as np
 from collections import deque
 from typing import Tuple, List
+from enviornments.action_mapper import ActionMapper
 
 Transition = Tuple[
     np.ndarray, int, float, np.ndarray, bool
@@ -11,7 +12,7 @@ Transition = Tuple[
 def _build_action_map(num_actions: int) -> List[Tuple[float, float]]:
 
     if num_actions == 9:
-        steerings = [-0.5, 0.0, 0.5]
+        steerings = [-0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75]
         throttles = [-0.2, 0.3, 0.8]
 
         return [(s,t) for t in throttles for s in steerings]
@@ -46,7 +47,7 @@ class ExpertReplayBuffer:
 
         self._expert_buffer: List[Transition] = []
 
-        self._action_map = _build_action_map(num_actions)
+        self._action_map = list(ActionMapper().action.values())
 
         self._load_expert_data(expert_dataset_path)
 
@@ -82,11 +83,16 @@ class ExpertReplayBuffer:
 
                 done = True
 
-            transition.append((obs, action_idx, 0.0, next_obs, done))
+            expert_reward = 2.0
+
+            if done:
+                expert_reward = -10.0
+
+            transition.append((obs, action_idx, expert_reward, next_obs, done))
 
         self._expert_buffer = transition
 
-        print(f"[ExpertReplayBuffer] Ucitano {len(self._agent_buffer)} ekspertskih tranzicija")
+        print(f"[ExpertReplayBuffer] Ucitano {len(self._expert_buffer)} ekspertskih tranzicija")
 
     def push(self, obs, action, reward, next_obs, done):
 

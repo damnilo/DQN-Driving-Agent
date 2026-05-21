@@ -5,19 +5,20 @@ from metadrive import MetaDriveEnv
 from metadrive.policy.expert_policy import ExpertPolicy
 from enviornments.metadrive_env import MetaDriveEnvWrapper
 from enviornments.observation_builder import ObservationBuilder
+from utils.frame_stack import FrameStack
 from utils.env_randomizer import get_random_metadrive_config
 
 DATASET_PATH = "dataset/expert_dataset.json"
 
-NUM_EPISODES = 400
+NUM_EPISODES = 100
 
-RESTART_EVERY = 15
+RESTART_EVERY = 20
 
 ENV_CONFIG = {
         "use_render": False,
         "manual_control": False,
         "traffic_density": 0.1,
-        "num_scenarios": 500,
+        "num_scenarios": 100,
         "start_seed": 0,
         "map": 4,
         # "daytime": random.choice(["08:00", "12:00", "17:30", "20:00"]),
@@ -68,6 +69,8 @@ def main():
     env = MetaDriveEnv(ENV_CONFIG)
     observation_builder = ObservationBuilder()
 
+    frame_stack = FrameStack(stack_size=4)
+
     dataset = []
 
     for episode in  range(NUM_EPISODES):
@@ -77,17 +80,19 @@ def main():
             env.close()
             env = MetaDriveEnv(ENV_CONFIG)
 
-        obs = reset_with_timeout(env);
+        result = reset_with_timeout(env);
 
-        if obs is None:
+        if result is None:
             env.close()
             env = MetaDriveEnv(ENV_CONFIG)
-            obs = reset_with_timeout(env)
+            result = reset_with_timeout(env)
 
-            if obs is None:
+            if result is None:
                 raise RuntimeError("Neuspesan reset nakon restartovanja env-a")
             
-        raw_obs, info = env.reset()
+        raw_obs, info = result
+        first_obs = observation_builder.build(env=env, raw_obs=raw_obs, info=info)
+        stacked_obs = frame_stack.reset(first_obs)
 
         done = False
 
@@ -103,6 +108,8 @@ def main():
                 env=env, raw_obs=raw_obs, info=info
             ))
 
+            stacked_obs = frame_stack.step(processed_obs)
+
             action = env.engine.get_policy(env.agent.id).act()
 
             next_obs, reward, terminated, truncated, info = env.step(action)
@@ -110,7 +117,7 @@ def main():
             done = terminated or truncated
 
             dataset.append({
-                "observation": processed_obs.tolist(),
+                "observation": stacked_obs.tolist(),
 
                 "action_steering": float(action[0]),
 

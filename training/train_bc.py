@@ -14,11 +14,11 @@ DATASET_PATH = "dataset/expert_dataset.json"
 OUTPUT_PATH = "checkpoints/bc_pretrain.pt"
 
 BC_CONFIG = {
-    "epochs": 60,
-    "batch_size": 256,
-    "lr": 1e-3,
-    "val_split": 0.1,
-    "patience": 5,
+    "epochs": 80,
+    "batch_size": 128,
+    "lr": 5e-4,
+    "val_split": 0.15,
+    "patience": 8,
     "clip_grad": 1.0
 }
 
@@ -178,7 +178,7 @@ def main():
 
     except Exception:
 
-        num_actions = 9
+        num_actions = 11
 
     agent = DQNAgent(
         input_size=obs_size, 

@@ -1,16 +1,20 @@
+from utils.frame_stack import FrameStack
+
 class Evaluator:
 
-    def __init__(self, env, agent, logger):
+    def __init__(self, env, agent, logger, stack_size=4):
 
         self.env = env
         self.agent = agent
         self.logger = logger
+        self.frame_stack = FrameStack(stack_size=stack_size)
 
     def evaluate(self, num_episodes):
 
         for episode in range(num_episodes):
 
             state, _ = self.env.reset()
+            state = self.frame_stack.reset(state)
 
             done = False
 
@@ -20,9 +24,10 @@ class Evaluator:
 
             while not done:
 
-                action = self.agent.select_action(state, step=0, training=True)
+                action = self.agent.select_action(state, step=0, training=False)
 
-                state, reward, terminated, truncated, info = self.env.step(action)
+                next_state, reward, terminated, truncated, info = self.env.step(action)
+                state = self.frame_stack.step(next_state)
 
                 done = terminated or truncated
 

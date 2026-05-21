@@ -11,11 +11,12 @@ from training.checkpoint_manager import CheckpointManager
 from utils.logger import Logger
 from configs.dqn_configs import *
 
+FRAME_STACK = 4
 ENV_CONFIG = {
         "use_render": False,
         "manual_control": False,
         "traffic_density": 0.1,
-        "num_scenarios": 500,
+        "num_scenarios": 100,
         "start_seed": 0,
         "map": 4,
         # "daytime": random.choice(["08:00", "12:00", "17:30", "20:00"]),
@@ -32,23 +33,23 @@ ENV_CONFIG = {
 }
 
 TRAIN_CONFIG = {
-    "num_episodes": 3000,
-    "batch_size": 128,
+    "num_episodes": 500,
+    "batch_size": 64,
     "gamma" : 0.99,
-    "lr": 3e-4,
-    "replay_capacity": 200_000,
+    "lr": 3e-5,
+    "replay_capacity": 150_000,
     "min_replay_size": 2_000,
-    "target_update_freq": 500
+    "target_update_freq": 300
 }
 
-EXPERT_RATIO = 0.25
+EXPERT_RATIO = 0.3
 EXPERT_DATASET = "dataset/expert_dataset.json"
 
 EPSILON_CONFIG = {
     "start": 1.0,
-    "end": 0.05,
-    "decay": 150_000,
-    "warmup_steps": 1_000
+    "end": 0.02,
+    "decay": 350_000,
+    "warmup_steps": 500
 }
 
 CHECKPOINT_FREQ = 100
@@ -61,7 +62,7 @@ def main():
 
     env.reset()
 
-    obs_size = env.obs_size
+    obs_size = env.obs_size * FRAME_STACK
 
     epsilon_scheduler = EpsilonScheduler(**EPSILON_CONFIG)
 
@@ -80,6 +81,7 @@ def main():
         agent.target_net.load_state_dict(agent.online_net.state_dict())
 
     optimizer = torch.optim.Adam(agent.online_net.parameters(), lr = TRAIN_CONFIG["lr"])
+    scheduler = None
 
     replay_buffer = ExpertReplayBuffer(
         capacity=TRAIN_CONFIG["replay_capacity"],
@@ -96,7 +98,7 @@ def main():
         checkpoint_manager.load(RESUME_PATH, agent, optimizer)
 
     trainer = Trainer(
-        env=env, agent=agent, replay_buffer=replay_buffer, optimizer=optimizer, config=TRAIN_CONFIG, logger=logger
+        env=env, agent=agent, replay_buffer=replay_buffer, optimizer=optimizer, config=TRAIN_CONFIG, logger=logger, scheduler=scheduler
     )
 
     eval_env = env
@@ -114,8 +116,13 @@ def main():
                 path = os.path.join("checkpoints", f"ep_{episode+1}.pt")
 
                 checkpoint_manager.save(path, agent, optimizer, trainer.global_step, episode+1)
-    except:
-        print("Training interrupted by user")
+    except KeyboardInterrupt:
+        print("Prekid treninga od strane korisnika.")
+    
+    except Exception as e:
+        import traceback
+        print(f"Greska na epizodi {episode+1}:")
+        traceback.print_exc()
 
     finally:
 
@@ -124,7 +131,7 @@ def main():
         )
 
         env.close()
-        evaluator.evaluate(num_episodes=250)
+        evaluator.evaluate(num_episodes=30)
         eval_env.close()
         logger.close()
 
