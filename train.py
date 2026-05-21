@@ -3,7 +3,6 @@ import os
 from enviornments.metadrive_env import MetaDriveEnvWrapper  
 from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
-from replay.replay_buffer import ReplayBuffer
 from replay.expert_replay_buffer import ExpertReplayBuffer
 from training.trainer import Trainer
 from training.evaluator import Evaluator

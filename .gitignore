@@ -4,8 +4,6 @@ agents/__pycache__/
 configs/__pycache__/
 controllers/__pycache__/
 envirornments/__pycache__/
-imitation/__pycache__/
-manual_control/__pycache__/
 replay/__pycache__/
 training/__pycache__/
 utils/__pycache__/

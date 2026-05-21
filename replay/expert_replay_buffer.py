@@ -8,19 +8,6 @@ from enviornments.action_mapper import ActionMapper
 Transition = Tuple[
     np.ndarray, int, float, np.ndarray, bool
 ]
-
-def _build_action_map(num_actions: int) -> List[Tuple[float, float]]:
-
-    if num_actions == 9:
-        steerings = [-0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75]
-        throttles = [-0.2, 0.3, 0.8]
-
-        return [(s,t) for t in throttles for s in steerings]
-    elif num_actions == 5:
-        return [(-0.5, 0.3), (-0.2, 0.3), (0.0, 0.5), (0.2, 0.3), (0.5, 0.3)]
-    else:
-        vals = np.linspace(-1, 1, num_actions)
-        return [(float(v), float(v)) for v in vals]
     
 def _nearest_descrete_action(steering: float, throttle: float, action_map: List[Tuple[float, float]]) -> int:
     

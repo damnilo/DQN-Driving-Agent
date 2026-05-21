@@ -1,8 +1,6 @@
 import torch
 import numpy as np
 
-from replay.transition import Transition
-from utils.logger import Logger
 from utils.frame_stack import FrameStack
 
 class Trainer:
@@ -134,7 +132,7 @@ class Trainer:
         with torch.no_grad():
             next_action = self.agent.online_net(next_states_t).argmax(dim=1, keepdim=True)
             target_q_values = self.agent.target_net(next_states_t)
-            max_target_q_values = target_q_values.gather(1, next_action)[0]
+            max_target_q_values = target_q_values.gather(1, next_action)
             targets = rewards_t + (self.config["gamma"] * (1 - dones_t) * max_target_q_values)
 
             targets = torch.clamp(targets, min=-50.0, max=50.0)
@@ -143,15 +141,15 @@ class Trainer:
 
         if torch.isnan(q_values).any():
             print("NaN Q Values")
-            return
+            return 0.0
 
         actions_q_values = torch.gather(q_values, dim=1, index=actions_t)
 
         loss = torch.nn.functional.smooth_l1_loss(actions_q_values, targets)
 
-        if torch.isnan(loss):
+        if torch.isnan(loss).any():
             print("Nan Loss Detected!")
-            return
+            return 0.0
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -167,4 +165,4 @@ class Trainer:
 
         torch.nn.utils.clip_grad_norm_(self.agent.online_net.parameters(), 5.0)
         self.optimizer.step()
-        return loss.item()
+        return float(loss.item())

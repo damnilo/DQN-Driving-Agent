@@ -10,7 +10,7 @@ class ObservationBuilder:
 
         heading = np.clip(np.array([self.compute_heading_error(info)]) / np.pi, -1.0, 1.0)
 
-        lane_offset = np.clip(np.array([self.compute_lane_offset(info)]) / 5.0, -1.0, -1.0)
+        lane_offset = np.clip(np.array([self.compute_lane_offset(info)]) / 5.0, -1.0, 1.0)
 
         waypoints = self.extract_waypoints(env)  # NOVO
 

@@ -45,7 +45,7 @@ class RewardFunction:
         heading_err = abs(info.get("heading_diff", 0.0))
         haeding_factor = max(0.0, 1.0 - heading_err)
         # Boosted slightly to reward progress more than just "sitting centered"
-        return speed * haeding_factor * 0.03
+        return speed * haeding_factor * 0.015
     
     def lane_reward(self, info):
         lane_offset = abs(info.get("lateral", 0.0))
@@ -57,7 +57,7 @@ class RewardFunction:
         steering = info.get("steering", 0.0)
         heading_err = abs(info.get("heading_diff", 0.0))
         
-        scale = max(0.05, 0.2 * (1.0 - heading_err * 1.5))
+        scale = max(0.05, 0.35 * (1.0 - heading_err * 1.5))
         
         penalty = abs(steering - self.prev_steering)
         self.prev_steering = steering
