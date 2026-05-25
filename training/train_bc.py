@@ -9,18 +9,9 @@ from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
 from configs.dqn_configs import *
 from enviornments.action_mapper import ActionMapper
+from configs.env_config import EXPERT_DATASET, BC_CHECKPOINT, BC_CONFIG
 
-DATASET_PATH = "dataset/expert_dataset.json"
-OUTPUT_PATH = "checkpoints/bc_pretrain.pt"
-
-BC_CONFIG = {
-    "epochs": 80,
-    "batch_size": 128,
-    "lr": 5e-4,
-    "val_split": 0.15,
-    "patience": 8,
-    "clip_grad": 1.0
-}
+FRAME_STACK = 4
 
 class ExpertDataset(Dataset):
 
@@ -63,7 +54,9 @@ class ExpertDataset(Dataset):
         return len(self.observations)
     
     def __getitem__(self, key):
-        return self.observations[key], self.actions[key]
+        obs = self.observations[key]
+        stacked = obs.repeat(FRAME_STACK)
+        return stacked, self.actions[key]
     
 class BCTrainer:
 
@@ -131,18 +124,18 @@ class BCTrainer:
         self._load_best()
     
     def _save_best(self):
-        os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-        torch.save(self.agent.online_net.state_dict(), OUTPUT_PATH)
+        os.makedirs(os.path.dirname(BC_CHECKPOINT), exist_ok=True)
+        torch.save(self.agent.online_net.state_dict(), BC_CHECKPOINT)
 
     def _load_best(self):
-        self.agent.online_net.load_state_dict(torch.load(OUTPUT_PATH, weights_only=True))
+        self.agent.online_net.load_state_dict(torch.load(BC_CHECKPOINT, weights_only=True))
         self.agent.target_net.load_state_dict(self.agent.online_net.state_dict())
 
 def main():
-    if not os.path.exists(DATASET_PATH):
+    if not os.path.exists(EXPERT_DATASET):
         raise FileNotFoundError
     
-    full_dataset = ExpertDataset(DATASET_PATH)
+    full_dataset = ExpertDataset(EXPERT_DATASET)
 
     val_size = int(len(full_dataset) * BC_CONFIG["val_split"])
     train_size = len(full_dataset) - val_size
@@ -166,8 +159,9 @@ def main():
     )
 
     epsilon_scheduler = EpsilonScheduler(start=0.0, end=0.0, decay=1, warmup_steps=0)
+    print(f"BC obs_size: {full_dataset.observations.shape[1]}")
 
-    obs_size = full_dataset.observations.shape[1]
+    obs_size = full_dataset.observations.shape[1] * FRAME_STACK
 
     try:
         from enviornments.metadrive_env import MetaDriveEnvWrapper

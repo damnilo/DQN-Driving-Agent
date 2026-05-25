@@ -21,27 +21,27 @@ class Trainer:
         if episode < 300:
             self.env.env.config["map"] = "SSSS"
             self.env.env.config["traffic_density"] = 0.0
-            self.env.env.config["horizon"] = 500
+            self.env.env.config["horizon"] = 800
         elif episode < 600:
             self.env.env.config["map"] = "SCSC"
             self.env.env.config["traffic_density"] = 0.03
-            self.env.env.config["horizon"] = 600
+            self.env.env.config["horizon"] = 900
         elif episode < 900:
             self.env.env.config["map"] = "SCSCS"
             self.env.env.config["traffic_density"] = 0.05
-            self.env.env.config["horizon"] = 700
+            self.env.env.config["horizon"] = 1100
         elif episode < 1300:
             self.env.env.config["map"] = 3
             self.env.env.config["traffic_density"] = 0.08
-            self.env.env.config["horizon"] = 800
+            self.env.env.config["horizon"] = 1200
         elif episode < 1800:
             self.env.env.config["map"] = 4
             self.env.env.config["traffic_density"] = 0.12
-            self.env.env.config["horizon"] = 900
+            self.env.env.config["horizon"] = 1400
         else:
             self.env.env.config["map"] = 5
             self.env.env.config["traffic_density"] = 0.15
-            self.env.env.config["horizon"] = 1000
+            self.env.env.config["horizon"] = 1600
 
     def train(self, num_episodes):
 
@@ -78,7 +78,7 @@ class Trainer:
                 action,
                 reward,
                 next_state,
-                done
+                terminated
             )
 
             state = next_state
@@ -96,13 +96,9 @@ class Trainer:
                 loss = self.train_step(batch)
                 losses.append(loss)
 
-
-            TAU = 0.0001
-            for online_p, target_p in zip(
-                self.agent.online_net.parameters(), self.agent.target_net.parameters()
-            ):
-                target_p.data.copy_(TAU * online_p.data + (1.0 - TAU) * target_p.data
-            )
+            tau = 0.005 # Brzina prilagođavanja target mreže
+            for target_param, online_param in zip(self.agent.target_net.parameters(), self.agent.online_net.parameters()):
+                target_param.data.copy_(tau * online_param.data + (1.0 - tau) * target_param.data)
         
         avg_loss = np.mean(losses) if losses else 0.0
 
@@ -117,8 +113,6 @@ class Trainer:
         return episode_reward
     
     def train_step(self, batch):
-        # PRIJE — očekivao Transition objekte:
-        # states = np.array([t.state for t in batch])
 
         # POSLIJE — ExpertReplayBuffer.sample() vraća direktno arraye:
         states, actions, rewards, next_states, dones = batch
@@ -163,6 +157,9 @@ class Trainer:
 
         total_norm = total_norm ** 0.5
 
-        torch.nn.utils.clip_grad_norm_(self.agent.online_net.parameters(), 5.0)
+        torch.nn.utils.clip_grad_norm_(self.agent.online_net.parameters(), 10.0)
+
+                # Ispis prosečnih vrednosti strimova za proveru zasićenja
+        
         self.optimizer.step()
         return float(loss.item())

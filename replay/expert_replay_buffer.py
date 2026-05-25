@@ -4,6 +4,7 @@ import numpy as np
 from collections import deque
 from typing import Tuple, List
 from enviornments.action_mapper import ActionMapper
+from configs.env_config import FRAME_STACK
 
 Transition = Tuple[
     np.ndarray, int, float, np.ndarray, bool
@@ -56,13 +57,13 @@ class ExpertReplayBuffer:
         transition = []
 
         for i, item in enumerate(raw):
-            obs = np.array(item["observation"], dtype=np.float32)
+            obs = np.tile(np.array(item["observation"], dtype=np.float32), FRAME_STACK)
             steering = float(item["action_steering"])
             throttle = float(item["action_throttle"])
             action_idx = _nearest_descrete_action(steering, throttle, action_map)
 
             if i+1 < len(raw):
-                next_obs = np.array(raw[i+1]["observation"], dtype=np.float32)
+                next_obs = np.tile(np.array(raw[i+1]["observation"], dtype=np.float32),FRAME_STACK)
 
                 done = False
             else:
@@ -70,10 +71,10 @@ class ExpertReplayBuffer:
 
                 done = True
 
-            expert_reward = 2.0
+            expert_reward = 1.0
 
             if done:
-                expert_reward = -10.0
+                expert_reward = 0.0
 
             transition.append((obs, action_idx, expert_reward, next_obs, done))
 

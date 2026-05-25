@@ -2,7 +2,6 @@ __pycache__/
 .venv/
 agents/__pycache__/
 configs/__pycache__/
-controllers/__pycache__/
 envirornments/__pycache__/
 replay/__pycache__/
 training/__pycache__/
@@ -10,4 +9,4 @@ utils/__pycache__/
 checkpoints/
 logs/
 dataset/expert_dataset.json
-training.zip
+xd.py

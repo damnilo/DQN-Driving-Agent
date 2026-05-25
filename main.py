@@ -3,30 +3,14 @@ from enviornments.metadrive_env import MetaDriveEnvWrapper
 from agents.dqn_agent import DQNAgent
 from utils.frame_stack import FrameStack
 from agents.epsilon_scheduler import EpsilonScheduler
-
-ENV_CONFIG = {
-        "use_render": True,
-        "manual_control": False,
-        "traffic_density": 0.1,
-        "num_scenarios": 20,
-        "start_seed": 0,
-        "map": 4,
-        # "daytime": random.choice(["08:00", "12:00", "17:30", "20:00"]),
-        "accident_prob": 0.0,
-        "vehicle_config": {
-            "show_lidar": True,
-            # "vehicle_model": "default", # Neki MetaDrive verzije zahtevaju specifične modele, ostavi default ako pravi problem
-        },
-        # ISPRAVLJENI KLJUČEVI:
-        "on_continuous_line_done": True, 
-        "crash_vehicle_done": True,      # Sudar sa drugim vozilom
-        "crash_object_done": True,       # Sudar sa objektom (ogradom, čunjem)
-        "out_of_road_done": True,  
-}
+from configs.env_config import ENV_CONFIG
 
 def main():
 
     config = ENV_CONFIG
+    config["use_render"] = True
+    config["map"] = "SSSS"
+    config["start_seed"] = 17
     env = MetaDriveEnvWrapper(config)
     frame_stack = FrameStack(stack_size=4)
     obs, info = env.reset()
