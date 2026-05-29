@@ -12,10 +12,11 @@ from configs.dqn_configs import *
 from enviornments.action_mapper import ActionMapper
 from configs.env_config import EXPERT_DATASET, BC_CHECKPOINT, BC_CONFIG, FRAME_STACK
 
-
+STRAIGHT_MAPS = {"SSSS"}
+CURVE_MAPS = {"SCSC", "CSCS", "CCCC", 4}
 class ExpertDataset(Dataset):
 
-    def __init__(self, path):
+    def __init__(self, path, map_family=None):
 
         self.action_map = ActionMapper().action
         with open(path, "r") as f:
@@ -25,10 +26,14 @@ class ExpertDataset(Dataset):
         valid_actions = []
 
         for item in raw:
+
+            if map_family == "straight" and str(item.get("map")) not in STRAIGHT_MAPS:
+                continue
+            if map_family == "curve" and str(item.get("map")) not in {str(m) for m in CURVE_MAPS}:
+                continue
+
             discrete_action = continuous_to_discrete(item["action_steering"], item["action_throttle"], self.action_map)
 
-            # FILTER NA OSNOVU AKCIJE: Izbacujemo situacije gde ekspert ne daje ni gas ni kočnicu (Klasa 2 = Coast / Stajanje)
-            # i gde je throttle praktično nula, što se dešava na samom startu simulacije.
             if discrete_action == 2 and abs(item["action_throttle"]) < 1e-3:
                 continue
 
@@ -36,7 +41,6 @@ class ExpertDataset(Dataset):
             valid_observations.append(obs_array)
             valid_actions.append(discrete_action)
 
-        # Bezbednosna provera u slučaju da je dataset previše specifičan
         if len(valid_actions) == 0:
             print("\n[UPOZORENJE] Filter akcija je izbacio previše frejmova. Vraćam sirove podatke.")
             for item in raw:
@@ -61,18 +65,19 @@ class BCTrainer:
 
         self.agent = agent
         self.config = config
-        
-        self.optimizer = torch.optim.Adam(self.agent.online_net.parameters(),
-                                           lr=config["lr"])
+        self.obs_size = obs_size
 
         self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=BC_CONFIG["epochs"], eta_min=1e-5)
     
+    def _make_optimizer(self, lr):
+        return torch.optim.Adam(self.agent.online_net.parameters(), lr=lr)
     
-    def train(self, train_loader, val_loader):
+    def train(self, train_loader, val_loader, lr=None, tag=""):
 
         cfg = self.config
+        lr = lr or cfg("lr")
+        optimizer = self._make_optimizer(lr)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=BC_CONFIG["epochs"], eta_min=1e-5)
         best_val = float("inf")
         no_improve = 0
 
@@ -85,12 +90,12 @@ class BCTrainer:
 
                 loss = self.criterion(logits, action_batch)
 
-                self.optimizer.zero_grad()
+                optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.agent.online_net.parameters(),
                                           cfg["clip_grad"])
 
-                self.optimizer.step()
+                optimizer.step()
                 train_loss += loss.item()
 
             train_loss /= len(train_loader)
@@ -104,10 +109,10 @@ class BCTrainer:
                     val_loss += self.criterion(logits, action_batch).item()
 
             val_loss /= len(val_loader)
-            self.scheduler.step()
+            scheduler.step()
 
             print(
-                f"Epoha [{epoch:03d}/{cfg['epochs']}] "
+                f"[BC {tag}] Epoha [{epoch:03d}/{cfg['epochs']}] "
                 f"train_loss: {train_loss:.5f}  val_loss: {val_loss:.5f}"
             )
 
@@ -130,67 +135,55 @@ class BCTrainer:
         self.agent.online_net.load_state_dict(torch.load(BC_CHECKPOINT, map_location="cpu", weights_only=True))
         self.agent.target_net.load_state_dict(self.agent.online_net.state_dict())
 
+    
+def make_loader(dataset_path, map_family=None, batch_size=256, val_split=0.15):
+        ds = ExpertDataset(dataset_path, map_family=map_family)
+        if len(ds) == 0:
+            return None, None, ds
+
+        val_size = int(len(ds) * val_split)
+        train_size = len(ds) - val_size
+        train_ds, val_ds = torch.utils.data.random_split(ds, [train_size, val_size])
+
+        train_labels = [ds.actions[i].item() for i in train_ds.indices]
+        num_actions = ActionMapper().num_actions()
+        class_count = torch.bincount(torch.tensor(train_labels, dtype=torch.long), minlength=num_actions)
+        class_weights = 1.0 / (class_count.float().sqrt() + 1e-5)
+        class_weights[class_count == 0] = 0.0
+        class_weights /= class_weights.sum()
+        sample_weights = [class_weights[l].item() for l in train_labels]
+        sampler = torch.utils.data.WeightedRandomSampler(sample_weights, len(sample_weights), replacement=True)
+
+        train_loader = DataLoader(
+            train_ds, 
+            batch_size=batch_size, 
+            sampler=sampler, 
+            num_workers=0,
+            pin_memory=torch.cuda.is_available()
+        )
+
+        val_loader = DataLoader(
+            train_ds, 
+            batch_size=batch_size, 
+            shuffle=False, 
+            num_workers=0,
+            pin_memory=torch.cuda.is_available()
+        )
+
+        return train_loader, val_loader, ds
+
 def main():
     if not os.path.exists(EXPERT_DATASET):
         raise FileNotFoundError
     
-    full_dataset = ExpertDataset(EXPERT_DATASET)
+    straight_train, straight_val, straight_ds = make_loader(EXPERT_DATASET, map_family="straight")
 
-    val_size = int(len(full_dataset) * BC_CONFIG["val_split"])
-    train_size = len(full_dataset) - val_size
+    obs_size = straight_ds.observations.shape[1]
 
-    train_ds, val_ds = torch.utils.data.random_split(full_dataset, [train_size, val_size])
-
-    train_labels = [full_dataset.actions[i].item() for i in train_ds.indices]
     num_actions = ActionMapper().num_actions()
-    class_counts = torch.bincount(torch.tensor(train_labels, dtype=torch.long), minlength=num_actions)
-
-    # Sqrt dampening umjesto 1/count — mnogo blaži balans
-    class_weights = 1.0 / (class_counts.float().sqrt() + 1e-5)
-    class_weights[class_counts == 0] = 0.0
-
-    # Normalizuj da suma bude 1
-    class_weights = class_weights / class_weights.sum()
-
-    sample_weights = [class_weights[label].item() for label in train_labels]
-
-    sampler = torch.utils.data.WeightedRandomSampler(
-        weights=sample_weights,
-        num_samples=len(sample_weights),
-        replacement=True
-    )
-
-    train_loader = DataLoader(
-        train_ds,
-        batch_size = BC_CONFIG["batch_size"],
-        sampler=sampler,
-        num_workers=0,
-        pin_memory=torch.cuda.is_available()
-    )
-
-    val_loader = DataLoader(
-        val_ds,
-        batch_size = BC_CONFIG["batch_size"],
-        shuffle=False,
-        num_workers=0,
-        pin_memory=torch.cuda.is_available()
-    )
 
     epsilon_scheduler = EpsilonScheduler(start=0.0, end=0.0, decay=1, warmup_steps=0)
-
-    obs_size = full_dataset.observations.shape[1]
-
-    try:
-        from enviornments.metadrive_env import MetaDriveEnvWrapper
-        from utils.env_randomizer import get_random_metadrive_config
-        _tmp_env = MetaDriveEnvWrapper(get_random_metadrive_config())
-        num_actions = _tmp_env.num_actions()
-        _tmp_env.close()
-
-    except Exception:
-
-        num_actions = ActionMapper().num_actions()
-
+    
     agent = DQNAgent(
         input_size=obs_size, 
         num_actions=num_actions,
@@ -198,7 +191,15 @@ def main():
     )
 
     trainer = BCTrainer(agent, BC_CONFIG, obs_size)
-    trainer.train(train_loader, val_loader)
+
+    if straight_train:
+        trainer.train(straight_train, straight_val, lr=BC_CONFIG["lr"], tag="straight")
+    else:
+        print("[BC] No straight data found")
+
+    curve_train, curve_val, curve_ds = make_loader(EXPERT_DATASET, map_family="curve")
+    if curve_train:
+        trainer.train(curve_train, curve_val, lr = BC_CONFIG["lr"] * 0.3, tag="curve")
 
 if __name__ == "__main__":
     main()

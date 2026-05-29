@@ -25,16 +25,16 @@ class Trainer:
         self.agent.target_net.to(self.device)
 
     def _pick_map_for_episode(self, episode: int):
-        if episode < 100:
+        if episode < 200:
             return "SSSS"
-        if episode < 400:
-            return "SCSC"
+        if episode < 500:
+            return random.choices(["SSSS", "SCSC"], weights=[0.60, 0.40])[0]
         if episode < 900:
             return random.choices(["SCSC", "CSCS"], weights=[0.50, 0.50])[0]
         if episode < 1400:
-            return random.choices(["SCSC", "CSCS", "CCCC"], weights=[0.4, 0.3, 0.3])[0]
+            return random.choices(["SCSC", "CSCS", "CCCC"], weights=[0.3, 0.3, 0.4])[0]
         if episode < 2000:
-            return random.choices(["CSCS", "CCCC", 4], weights=[0.3, 0.3, 0.4])[0]
+            return random.choices(["CSCS", "CCCC", 4], weights=[0.3, 0.35, 0.35])[0]
         return 4
 
     def _horizon_for_map(self, target_map) -> int:
@@ -73,6 +73,10 @@ class Trainer:
         current_config["start_seed"] = 0
         current_config["num_scenarios"] = 50
 
+        if old_family == "straight" and new_family == "curve":
+            for param in self.agent.online_net.parameters():
+                param.requires_grad = False
+
         from enviornments.metadrive_env import MetaDriveEnvWrapper
 
         self.env = MetaDriveEnvWrapper(current_config)
@@ -105,6 +109,9 @@ class Trainer:
 
         losses = []
         steps = 0
+
+        early_exit_threshold = -300.0 if self.global_step > 1_000 else -600.0
+
         while not done:
 
             action = self.agent.select_action(
@@ -141,13 +148,13 @@ class Trainer:
                 loss = self.train_step(batch)
                 losses.append(loss)
 
-            if episode_reward < -400 and self.global_step > 300:
-                print("[Trainer] Epizoda zavrsena ranije zbog loseg ucenja...")
-                done = True
-
             tau = 0.005
             for target_param, online_param in zip(self.agent.target_net.parameters(), self.agent.online_net.parameters()):
                 target_param.data.copy_(tau * online_param.data + (1.0 - tau) * target_param.data)
+
+            if episode_reward < early_exit_threshold and self.global_step > 300:
+                print("[Trainer] Epizoda zavrsena ranije zbog loseg ucenja...")
+                done = True
 
             steps += 1
         

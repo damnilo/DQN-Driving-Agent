@@ -6,7 +6,7 @@ from metadrive.policy.expert_policy import ExpertPolicy
 from utils.frame_stack import FrameStack
 from configs.env_config import *
 
-NUM_EPISODES = 200
+NUM_EPISODES = 300
 
 RESTART_EVERY = 20
 
@@ -30,14 +30,13 @@ def map_for_episode(episode, num_episodes):
 
     if ratio < 0.1:
         return "SSSS"
-    elif ratio < 0.2:
+    elif ratio < 0.35:
         return "SCSC"
-    elif ratio < 0.3:
+    elif ratio < 0.60:
         return "CSCS"
-    elif ratio < 0.6:
+    elif ratio < 0.80:
         return "CCCC"
-    else:
-        return 4
+    return 4
 
 def make_json_safe(obj):
 
@@ -100,10 +99,8 @@ def main():
             if result is None:
                 raise RuntimeError("Neuspesan reset nakon restartovanja env-a")
             
-        stacked_obs, info = env.reset()
-        stacked_obs = frame_stack.reset(stacked_obs)
-
-        raw_obs, _,  _, _, info = env.step_continuous([0.0, 0.3])
+        raw_obs, info = env.reset()
+        stacked_obs = frame_stack.reset(raw_obs)
 
         done = False
 
@@ -159,8 +156,6 @@ def main():
 
     os.replace(tmp_path, EXPERT_DATASET)
     print(f"[Dataset] Sacuvano {len(dataset)} tranzicija u {EXPERT_DATASET}")
-
-    print()
 
     env.close()
 

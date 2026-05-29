@@ -10,10 +10,10 @@ class RewardFunction:
 
     def compute(self, info, env_reward=0.0, action=None):
         if info.get("crash", False):
-            return -300.0
+            return -150.0 if self.use_soft_out_of_road else -300.0
 
         if info.get("out_of_road", False):
-            return -80.0 if self.use_soft_out_of_road else -300.0
+            return -60.0 if self.use_soft_out_of_road else -300.0
         
         if info.get("arrive_dest", False):
             return 200.0
@@ -34,17 +34,19 @@ class RewardFunction:
 
         penalty = 0.0
 
+        jerk_scale = 0.01 if self.use_soft_out_of_road else 0.02
         penalty += abs(throttle - self.prev_throttle) * 0.02
-        steer_w = 0.008 if heading_err > 0.25 else 0.02
+        steer_w = 0.005 if heading_err > 0.25 else jerk_scale
         penalty += abs(steering - self.prev_steering) * steer_w
 
         step_reward += 0.4 * max(0.0, 1.0 - heading_err / self.MAX_HEADING_ERR)
         step_reward += 0.3 * max(0.0, 1.0 - lateral / (self.LANE_WIDTH / 2))
 
         if nav_cmd != 0.0 and steering * nav_cmd > 0:
-            step_reward += 0.1
+            turn_bonus = 0.3 * abs(steering) * abs(nav_cmd)
+            step_reward += turn_bonus
 
-        target_speed = max(8.0, 40.0 * (1.0 - heading_err))
+        target_speed = max(6.0, 40.0 * (1.0 - heading_err))
         moving_bonus = min(speed_val, target_speed) * 0.01
 
         if speed_val < 1.0 and heading_err < 0.2:

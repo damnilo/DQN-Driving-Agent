@@ -105,18 +105,8 @@ def main():
                     f"reward={curr_map['avg_reward']:.2f}"
                 )
 
-                should_save = composite_score > best_composite_score
-
-                if should_save:
-                    best_composite_score = composite_score
-
-                    checkpoint_manager.save(
-                        "checkpoints/best_model.pt",
-                        agent,
-                        optimizer,
-                        trainer.global_step,
-                        episode + 1,
-                    )
+                if results.get("SSSS", {}).get("success_rate", 0) >= 0.9:
+                    checkpoint_manager.save("checkpoints/best_straight.pt")
 
             if (episode + 1) % CHECKPOINT_FREQ == 0:
                 path = os.path.join("checkpoints", f"ep_{episode + 1}.pt")

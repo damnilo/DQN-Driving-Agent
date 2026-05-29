@@ -7,6 +7,8 @@ class ObservationBuilder:
     LIDAR_SLICE = slice(19, 259)
     OBS_DIM = 259
 
+    EXTRA_DIM = 9
+
     def build(self, env, raw_obs, info):
         vec = self._to_vector(raw_obs)
 
@@ -17,9 +19,10 @@ class ObservationBuilder:
         else:
             ego, nav, lidar = self._fallback_from_agent(env, info)
 
-        extras = self._sensor_extras(env)
+        sensor_extras = self._sensor_extras(env)
+        hand_extras = self._hand_crafted_extras(info)
 
-        return np.concatenate([ego, nav, lidar, extras]).astype(np.float32)
+        return np.concatenate([ego, nav, lidar, sensor_extras, hand_extras]).astype(np.float32)
     
     def _to_vector(self, raw_obs):
         if isinstance(raw_obs, dict):
@@ -80,3 +83,13 @@ class ObservationBuilder:
             return np.array([], dtype=np.float32)
         
         return np.concatenate(parts)
+
+    def _hand_crafted_extras(self, info):
+        nav_cmd = float(info.get("navigation_command_float", 0.0))
+        heading = np.clip(float(info.get("heading_error", 0.0)) / np.pi, -1.0, 1.0)
+        lateral = np.clip(float(info.get("lateral_offset", 0.0)) / 5.0, -1.0, 1.0)
+        dist_left = np.clip(float(info.get("dist_left", 0.0)) / 10.0, 0.0, 1.0)
+        dist_right = np.clip(float(info.get("dist_right", 0.0)) / 10.0, 0.0, 1.0)
+        speed = np.clip(float(info.get("velocity", 0.0)) / 120.0, 0.0, 1.0)
+
+        return np.array([nav_cmd, heading, lateral, dist_left, dist_right, speed], dtype=np.float32) 

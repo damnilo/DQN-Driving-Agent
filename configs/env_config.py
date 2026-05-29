@@ -42,7 +42,7 @@ ENV_CONFIG = {
 FRAME_STACK = 4
 
 TRAIN_CONFIG = {
-    "num_episodes": 5000,
+    "num_episodes": 6000,
     "batch_size": 64,
     "gamma" : 0.99,
     "lr": 1e-4,
@@ -52,7 +52,7 @@ TRAIN_CONFIG = {
 }
 
 EXPERT_RATIO = 0.3
-EXPERT_RATIO_CURVE = 0.5
+EXPERT_RATIO_CURVE = 0.65
 PRETRAIN_DQN_STEPS = 0
 EXPERT_DATASET = "dataset/expert_dataset.json"
 
@@ -66,12 +66,12 @@ CHECKPOINT_CURVE_WEIGHT = 0.7
 EPSILON_CONFIG = {
     "start": 0.50,
     "end": 0.02,
-    "decay": 300_000,
+    "decay": 400_000,
     "warmup_steps": 5_000
 }
 
 CHECKPOINT_FREQ = 100
-EVAL_FREQ = 100
+EVAL_FREQ = 200
 BC_CHECKPOINT = "checkpoints/bc_pretrain.pt"
 
 BC_CONFIG = {
