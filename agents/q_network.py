@@ -6,7 +6,8 @@ class QNetwork(nn.Module):
 
         self.shared = nn.Sequential(
             nn.Linear(input_size, 512), nn.ReLU(),
-            nn.Linear(512, 256), nn.ReLU()
+            nn.Linear(512, 256), nn.ReLU(),
+            nn.Linear(256, 256), nn.ReLU()
         )
         self.value_stream = nn.Sequential(
             nn.Linear(256, 128), nn.ReLU(),

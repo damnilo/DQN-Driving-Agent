@@ -2,66 +2,81 @@ import numpy as np
 
 class ObservationBuilder:
 
+    EGO_SLICE = slice(0, 9)
+    NAV_SLICE = slice(9, 19)
+    LIDAR_SLICE = slice(19, 259)
+    OBS_DIM = 259
+
     def build(self, env, raw_obs, info):
+        vec = self._to_vector(raw_obs)
 
-        lidar = self.extract_lidar(raw_obs) / 50.0
+        if len(vec) >= 259:
+            ego = np.clip(vec[self.EGO_SLICE], -1.0, 1.0)
+            nav = np.clip(vec[self.NAV_SLICE], -1.0, 1.0)
+            lidar = np.clip(vec[self.LIDAR_SLICE], 0.0, 1.0)
+        else:
+            ego, nav, lidar = self._fallback_from_agent(env, info)
 
-        speed = np.clip(np.array([info.get("speed", 0.0)]) / 120.0, 0.0, 1.0)
+        extras = self._sensor_extras(env)
 
-        heading = np.clip(np.array([self.compute_heading_error(info)]) / np.pi, -1.0, 1.0)
-
-        lane_offset = np.clip(np.array([self.compute_lane_offset(info)]) / 5.0, -1.0, 1.0)
-
-        waypoints = self.extract_waypoints(env)  # NOVO
-
-        return np.concatenate([
-            lidar, speed, heading, lane_offset, waypoints  # NOVO
-        ]).astype(np.float32)
+        return np.concatenate([ego, nav, lidar, extras]).astype(np.float32)
     
-    def extract_lidar(self, raw_obs):
-
+    def _to_vector(self, raw_obs):
         if isinstance(raw_obs, dict):
-            lidar = raw_obs.get("lidar", raw_obs.get("cloud_points", np.array([])))
-            return np.array(lidar, dtype=np.float32).flatten()
+            parts = []
+            for key in ("lidar", "ego_state", "navigation"):
+                if key in raw_obs:
+                    parts.append(np.asarray(raw_obs[key], dtype=np.float32).flatten())
+            
+            if parts:
+                return np.concatenate(parts)
 
-        return np.array(raw_obs, dtype=np.float32).flatten()
-    
-    def compute_heading_error(self, info):
-        return info.get("heading_diff", 0.0)
-    
-    def compute_lane_offset(self, info):
-        return info.get("lateral", 0.0)
+            return np.asarray(raw_obs.get("lidar", []), dtype=np.float32).flatten()
+        
+        return np.asarray(raw_obs, dtype=np.float32).flatten()
 
-    def extract_waypoints(self, env):
+    def _fallback_from_agent(self, env, info):
+        agent = env.agent
+        speed = float(info.get("velocity", getattr(agent, "speed", 0.0))) / 120.0
+        heading_err = float(info.get("heading_error", 0.0)) / np.pi
+        lat = float(info.get("lateral_offset", 0.0)) / 5.0
+        ego = np.array([
+            heading_err,
+            float(getattr(agent, "steering", 0.0)),
+            speed,
+            float(info.get("dist_left", 0.0)) / 5.0,
+            float(info.get("dist_right", 0.0)) / 5.0,
+            0, 0, 0, 0
+        ], dtype=np.float32)[:9]
+        nav = np.zeros(10, dtype=np.float32)
         try:
-            navi = env.agent.navigation
-            checkpoints = navi.checkpoints
-            ego_pos = env.agent.position
-            ego_heading = env.agent.heading_theta
-
-            waypoints = []
-            for i in range(min(6, len(checkpoints))):
-                wp = checkpoints[i]
-                dx = wp[0] - ego_pos[0]
-                dy = wp[1] - ego_pos[1]
-
-                # Pretvori u lokalni koordinatni sistem vozila
-                cos_h = np.cos(-ego_heading)
-                sin_h = np.sin(-ego_heading)
-                local_x = dx * cos_h - dy * sin_h
-                local_y = dx * sin_h + dy * cos_h
-
-                # Normalizuj
-                waypoints.extend([local_x / 50.0, local_y / 50.0])
-
-            # Dopuni nulama ako ima manje od 3 checkpointa
-            while len(waypoints) < 12:
-                waypoints.append(0.0)
-
-            return np.array(waypoints, dtype=np.float32)
-
+            ni = np.asarray(env.agent.navigation.get_navi_info(), dtype=np.float32)
+            nav[: min(10, len(ni))] = ni[:10]
         except Exception:
-            return np.zeros(12, dtype=np.float32)
+            pass
 
-    def obs_size(self, env, raw_obs: np.ndarray, info: dict) -> int:
-        return len(self.build(env, raw_obs, info))
+        lidar = self._read_lidar_sensor(env)
+        return ego, nav, lidar
+
+    def _read_lidar_sensor(self, env):
+        try:
+            lidar = env.engine.get_sensor("lidar")
+            data = np.asarray(lidar.perceive(env.agent, num_lasers=240), dtype=np.float32)
+            return np.clip(data.flatten()[:240], 0.0, 1.0)
+        except Exception:
+            return np.zeros(240, dtype=np.float32)
+
+    def _sensor_extras(self, env):
+        parts = []
+        for name in ("side_detector", "lane_line_detector"):
+            try:
+                sensor = env.engine.get_sensor(name)
+                data = np.asarray(sensor.perceive(env.agent), dtype=np.float32)
+                parts.append(np.clip(data, 0.0, 1.0))
+            except Exception:
+                pass
+        
+        if not parts:
+            return np.array([], dtype=np.float32)
+        
+        return np.concatenate(parts)

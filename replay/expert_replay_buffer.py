@@ -2,6 +2,7 @@ import json
 import random
 import numpy as np
 from collections import deque
+from utils.action_discretizer import continuous_to_discrete
 from typing import Tuple, List
 from enviornments.action_mapper import ActionMapper
 from configs.env_config import FRAME_STACK
@@ -9,19 +10,7 @@ from configs.env_config import FRAME_STACK
 Transition = Tuple[
     np.ndarray, int, float, np.ndarray, bool
 ]
-    
-def _nearest_descrete_action(steering: float, throttle: float, action_map: List[Tuple[float, float]]) -> int:
-    
-    best_idx = 0
-    best_dist = float("inf")
 
-    for idx, (s, t) in enumerate(action_map):
-        dist = (s - steering) ** 2 + (t - throttle) ** 2
-        if dist < best_dist:
-            best_dist = dist
-            best_idx = idx
-
-    return best_idx
 
 class ExpertReplayBuffer:
 
@@ -35,7 +24,7 @@ class ExpertReplayBuffer:
 
         self._expert_buffer: List[Transition] = []
 
-        self._action_map = list(ActionMapper().action.values())
+        self._action_map = ActionMapper().action
 
         self._load_expert_data(expert_dataset_path)
 
@@ -45,41 +34,37 @@ class ExpertReplayBuffer:
             return
         
         try:
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 raw = json.load(f)
 
         except FileNotFoundError:
             print(f"[ExpertReplayBuffer] Dataset nije pronadjen")
 
             return
+
+        except json.JSONDecodeError as e:
+            print(f"[ExpertReplayBuffer] Ostecen JSON: {path}")
+            print(f"  {e}")
+            print("  Pokreni: python salvage_dataset.py")
+            print("  Ili ponovo: python collect_idm.py")
+            return
         
-        action_map = self._action_map
         transition = []
 
         for i, item in enumerate(raw):
-            obs = np.tile(np.array(item["observation"], dtype=np.float32), FRAME_STACK)
+            obs = np.array(item["observation"], dtype=np.float32)
+            next_obs = np.array(item["next_observation"], dtype=np.float32)
+
             steering = float(item["action_steering"])
             throttle = float(item["action_throttle"])
-            action_idx = _nearest_descrete_action(steering, throttle, action_map)
+            action_idx = continuous_to_discrete(steering, throttle, self._action_map)
 
-            if i+1 < len(raw):
-                next_obs = np.tile(np.array(raw[i+1]["observation"], dtype=np.float32),FRAME_STACK)
+            reward = float(item.get("reward", 0.0))
+            done = bool(item.get("done", False))
 
-                done = False
-            else:
-                next_obs = obs.copy()
-
-                done = True
-
-            expert_reward = 1.0
-
-            if done:
-                expert_reward = 0.0
-
-            transition.append((obs, action_idx, expert_reward, next_obs, done))
+            transition.append((obs, action_idx, reward, next_obs, done))
 
         self._expert_buffer = transition
-
         print(f"[ExpertReplayBuffer] Ucitano {len(self._expert_buffer)} ekspertskih tranzicija")
 
     def push(self, obs, action, reward, next_obs, done):
@@ -109,6 +94,9 @@ class ExpertReplayBuffer:
         if n_agent > 0:
             samples += random.sample(list(self._agent_buffer), min(n_agent, len(self._agent_buffer)))
 
+        if not samples:
+            raise RuntimeError("Replay Buffer je prazan. Ponovo pokreni collect_idm.py")
+
         obs_arr, actions_arr, rewards_arr, next_obs_arr, dones_arr = zip(*samples)
 
         return (np.array(obs_arr, dtype=np.float32), np.array(actions_arr, dtype=np.int64),
@@ -127,5 +115,9 @@ class ExpertReplayBuffer:
         return len(self._expert_buffer)
     
     def is_ready(self, min_size):
-        total = self.agent_size + self.expert_size
-        return total >= min_size
+        if len(self._expert_buffer) >= min_size:
+            return True
+        return self.agent_size >= min_size
+    
+    def clear_agent_buffer(self):
+        self._agent_buffer.clear()

@@ -4,78 +4,61 @@ class RewardFunction:
 
     def __init__(self):
         self.prev_steering = 0.0
+        self.prev_throttle = 0.0
+        self.low_speed_steps = 0
+        self.use_soft_out_of_road = False
 
-    def compute(self, info):
-    
-        if info.get("out_of_road", False):
-            return -150.0
-        
+    def compute(self, info, env_reward=0.0, action=None):
         if info.get("crash", False):
-            return -150.0
-        
-        # ZAMIJENI stari speed_penalty blok sa:
-        speed = info.get("speed", 0.0)
-        speed_penalty = -0.3 if speed < 1.0 else 0.0  # kažnjava samo stajanje
-        
-        reward = 0.1
-        reward += self.forward_reward(info) * 2.0
-        reward += self.lane_reward(info)
-        reward += self.goal_reward(info)
-        reward += self.heading_penalty(info) * 0.3
-        reward += self.action_smoothing_penalty(info)
-        reward += self.lateral_penalty(info) * 0.2
-        reward += speed_penalty
-        reward += self.idle_penalty(info) * 0.3
+            return -300.0
 
-        return reward
-    
-    def idle_penalty(self, info):
-        # Reduced this so it doesn't completely cancel out the lane reward
-        if info.get("speed", 0.00) < 0.5:
-            return -1.0 
-        return 0.0
-    
-    def forward_reward(self, info):
-        speed = info.get("speed", 0.0)
-        heading_err = abs(info.get("heading_diff", 0.0))
-        heading_factor = max(0.0, 1.0 - heading_err)
-        # Boosted slightly to reward progress more than just "sitting centered"
-        return speed * heading_factor * 0.05
-    
-    def lane_reward(self, info):
-        lane_offset = abs(info.get("lateral", 0.0))
-        normilised = min(lane_offset / self.LANE_WIDTH, 1.0)
-        # We give up to +0.8 here
-        return (1.0 - (normilised)) * 1.0
-    
-    def action_smoothing_penalty(self, info):
-        steering = info.get("steering", 0.0)
-        heading_err = abs(info.get("heading_diff", 0.0))
+        if info.get("out_of_road", False):
+            return -80.0 if self.use_soft_out_of_road else -300.0
         
-        scale = max(0.05, 0.35 * (1.0 - heading_err * 1.5))
-        
-        penalty = abs(steering - self.prev_steering)
-        self.prev_steering = steering
-        return float(-scale * penalty)
-    
-    def heading_penalty(self, info):
-        heading_err = abs(info.get("heading_diff", 0.0))
-        normilised = min(heading_err / self.MAX_HEADING_ERR, 1.0)
-
-        return -1.0 * normilised
-    
-    def lateral_penalty(self, info):
-        lateral = info.get("lateral", 0.0)
-        lateral_velocity = info.get("lateral_velocity", 0.0)
-
-        if (lateral * lateral_velocity) > 0:
-            return -0.5 * abs(lateral_velocity)
-        
-        return 0.0
-
-    def goal_reward(self, info):
-
         if info.get("arrive_dest", False):
             return 200.0
+
+        step_reward = float(info.get("step_reward", env_reward))  # MetaDrive ugrađeni reward
         
-        return 0.0
+        steering = float(info.get("steering", 0.0))
+        throttle = float(info.get("acceleration", 0.0))
+        
+        if action is not None:
+            steering = float(action[0])
+            throttle = float(action[1])
+
+        speed_val = float(info.get("velocity", 0.0))
+        heading_err = abs(float(info.get("heading_error", 0.0)))
+        lateral = abs(float(info.get("lateral_offset", 0.0)))
+        nav_cmd = float(info.get("navigation_command_float", 0.0))
+
+        penalty = 0.0
+
+        penalty += abs(throttle - self.prev_throttle) * 0.02
+        steer_w = 0.008 if heading_err > 0.25 else 0.02
+        penalty += abs(steering - self.prev_steering) * steer_w
+
+        step_reward += 0.4 * max(0.0, 1.0 - heading_err / self.MAX_HEADING_ERR)
+        step_reward += 0.3 * max(0.0, 1.0 - lateral / (self.LANE_WIDTH / 2))
+
+        if nav_cmd != 0.0 and steering * nav_cmd > 0:
+            step_reward += 0.1
+
+        target_speed = max(8.0, 40.0 * (1.0 - heading_err))
+        moving_bonus = min(speed_val, target_speed) * 0.01
+
+        if speed_val < 1.0 and heading_err < 0.2:
+            self.low_speed_steps += 1
+            penalty += 1.0 + min(self.low_speed_steps, 50) * 0.03
+        else:
+            self.low_speed_steps = 0
+
+        self.prev_steering = steering
+        self.prev_throttle = throttle 
+
+        return float(step_reward + moving_bonus - penalty)
+    
+    def reset(self):
+        self.prev_steering = 0.0
+        self.prev_throttle = 0.0
+        self.low_speed_steps = 0

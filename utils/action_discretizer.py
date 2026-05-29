@@ -1,27 +1,16 @@
 import numpy as np
 
-class ActionDiscretizer:
+STEERING_WEIGHT = 3.0
 
-    def __init__(self, action_map):
+def continuous_to_discrete(steering, throttle, action_map):
 
-        self.action_map = action_map
+    best_action, best_distance = 0, float("inf")
 
-    def discretize(self, steering, throttle):
+    for idx, (s, t) in action_map.items():
+        ds, dt = steering - s, throttle - t
+        distance = (ds * STEERING_WEIGHT) ** 2 + dt ** 2
 
-        target = np.asarray([steering, throttle])
+        if distance < best_distance:
+            best_distance, best_action = distance, idx
 
-        best_idx = 0
-        best_dist = float("inf")
-
-        for idx, action in self.action_map.items():
-
-            action = np.array(action)
-
-            dist = np.linalg.norm(target - action)
-
-            if dist < best_dist:
-
-                best_dist = dist
-                best_idx = idx
-
-        return best_idx
+    return best_action

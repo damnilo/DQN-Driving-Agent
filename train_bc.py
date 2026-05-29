@@ -7,69 +7,67 @@ from torch.utils.data import Dataset, DataLoader
 
 from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
+from utils.action_discretizer import continuous_to_discrete
 from configs.dqn_configs import *
 from enviornments.action_mapper import ActionMapper
-from configs.env_config import EXPERT_DATASET, BC_CHECKPOINT, BC_CONFIG
+from configs.env_config import EXPERT_DATASET, BC_CHECKPOINT, BC_CONFIG, FRAME_STACK
 
-FRAME_STACK = 4
 
 class ExpertDataset(Dataset):
 
     def __init__(self, path):
 
+        self.action_map = ActionMapper().action
         with open(path, "r") as f:
             raw = json.load(f)
 
-        self.observations = torch.tensor([item["observation"] for item in raw], dtype=torch.float32)
-
-        action = []
+        valid_observations = []
+        valid_actions = []
 
         for item in raw:
-            discrete_action = self.continuous_to_discrete(item["action_steering"], item["action_throttle"])
+            discrete_action = continuous_to_discrete(item["action_steering"], item["action_throttle"], self.action_map)
 
-            action.append(discrete_action)
+            # FILTER NA OSNOVU AKCIJE: Izbacujemo situacije gde ekspert ne daje ni gas ni kočnicu (Klasa 2 = Coast / Stajanje)
+            # i gde je throttle praktično nula, što se dešava na samom startu simulacije.
+            if discrete_action == 2 and abs(item["action_throttle"]) < 1e-3:
+                continue
 
-        self.actions = torch.tensor(action, dtype=torch.long)
+            obs_array = np.array(item["observation"], dtype=np.float32)
+            valid_observations.append(obs_array)
+            valid_actions.append(discrete_action)
 
-    def continuous_to_discrete(self, steering, throttle):
-        
-        best_action = 0
-        best_distance = float("inf")
-        action_map = ActionMapper().action
+        # Bezbednosna provera u slučaju da je dataset previše specifičan
+        if len(valid_actions) == 0:
+            print("\n[UPOZORENJE] Filter akcija je izbacio previše frejmova. Vraćam sirove podatke.")
+            for item in raw:
+                obs_array = np.array(item["observation"], dtype=np.float32)
+                valid_observations.append(obs_array)
+                valid_actions.append(continuous_to_discrete(item["action_steering"], item["action_throttle"], self.action_map))
 
-        for idx, action in action_map.items():
+        self.observations = torch.tensor(np.array(valid_observations), dtype=torch.float32)
+        self.actions = torch.tensor(valid_actions, dtype=torch.long)
 
-            ds = steering - action[0]
-            dt = throttle - action[1]
-
-            distance = ds * ds + dt * dt
-
-            if distance < best_distance:
-                best_distance = distance
-                best_action = idx
-
-        return best_action
+        print(f"[DATASET INFO] Filtrirano stajanje preko akcija. Preostalo uzoraka za trening: {len(self.actions)}")
 
     def __len__(self):
         return len(self.observations)
     
     def __getitem__(self, key):
-        obs = self.observations[key]
-        stacked = obs.repeat(FRAME_STACK)
-        return stacked, self.actions[key]
+        return self.observations[key], self.actions[key]
     
 class BCTrainer:
 
-    def __init__(self, agent, config):
+    def __init__(self, agent, config, obs_size):
 
         self.agent = agent
         self.config = config
         
-        self.optimizer = torch.optim.Adam(self.agent.online_net.parameters(), lr=config["lr"])
+        self.optimizer = torch.optim.Adam(self.agent.online_net.parameters(),
+                                           lr=config["lr"])
 
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=2, factor=0.5)
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=BC_CONFIG["epochs"], eta_min=1e-5)
     
     
     def train(self, train_loader, val_loader):
@@ -89,7 +87,8 @@ class BCTrainer:
 
                 self.optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(self.agent.online_net.parameters(), cfg["clip_grad"])
+                nn.utils.clip_grad_norm_(self.agent.online_net.parameters(),
+                                          cfg["clip_grad"])
 
                 self.optimizer.step()
                 train_loss += loss.item()
@@ -105,7 +104,7 @@ class BCTrainer:
                     val_loss += self.criterion(logits, action_batch).item()
 
             val_loss /= len(val_loader)
-            self.scheduler.step(val_loss)
+            self.scheduler.step()
 
             print(
                 f"Epoha [{epoch:03d}/{cfg['epochs']}] "
@@ -128,7 +127,7 @@ class BCTrainer:
         torch.save(self.agent.online_net.state_dict(), BC_CHECKPOINT)
 
     def _load_best(self):
-        self.agent.online_net.load_state_dict(torch.load(BC_CHECKPOINT, weights_only=True))
+        self.agent.online_net.load_state_dict(torch.load(BC_CHECKPOINT, map_location="cpu", weights_only=True))
         self.agent.target_net.load_state_dict(self.agent.online_net.state_dict())
 
 def main():
@@ -142,10 +141,29 @@ def main():
 
     train_ds, val_ds = torch.utils.data.random_split(full_dataset, [train_size, val_size])
 
+    train_labels = [full_dataset.actions[i].item() for i in train_ds.indices]
+    num_actions = ActionMapper().num_actions()
+    class_counts = torch.bincount(torch.tensor(train_labels, dtype=torch.long), minlength=num_actions)
+
+    # Sqrt dampening umjesto 1/count — mnogo blaži balans
+    class_weights = 1.0 / (class_counts.float().sqrt() + 1e-5)
+    class_weights[class_counts == 0] = 0.0
+
+    # Normalizuj da suma bude 1
+    class_weights = class_weights / class_weights.sum()
+
+    sample_weights = [class_weights[label].item() for label in train_labels]
+
+    sampler = torch.utils.data.WeightedRandomSampler(
+        weights=sample_weights,
+        num_samples=len(sample_weights),
+        replacement=True
+    )
+
     train_loader = DataLoader(
         train_ds,
         batch_size = BC_CONFIG["batch_size"],
-        shuffle=True,
+        sampler=sampler,
         num_workers=0,
         pin_memory=torch.cuda.is_available()
     )
@@ -159,9 +177,8 @@ def main():
     )
 
     epsilon_scheduler = EpsilonScheduler(start=0.0, end=0.0, decay=1, warmup_steps=0)
-    print(f"BC obs_size: {full_dataset.observations.shape[1]}")
 
-    obs_size = full_dataset.observations.shape[1] * FRAME_STACK
+    obs_size = full_dataset.observations.shape[1]
 
     try:
         from enviornments.metadrive_env import MetaDriveEnvWrapper
@@ -172,7 +189,7 @@ def main():
 
     except Exception:
 
-        num_actions = 11
+        num_actions = ActionMapper().num_actions()
 
     agent = DQNAgent(
         input_size=obs_size, 
@@ -180,7 +197,7 @@ def main():
         epsilon_scheduler=epsilon_scheduler
     )
 
-    trainer = BCTrainer(agent, BC_CONFIG)
+    trainer = BCTrainer(agent, BC_CONFIG, obs_size)
     trainer.train(train_loader, val_loader)
 
 if __name__ == "__main__":

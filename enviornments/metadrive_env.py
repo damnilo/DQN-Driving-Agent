@@ -2,6 +2,7 @@ from metadrive import MetaDriveEnv
 from enviornments.action_mapper import ActionMapper
 from enviornments.observation_builder import ObservationBuilder
 from enviornments.reward_function import RewardFunction
+from enviornments.info_builder import InfoBuilder
 
 class MetaDriveEnvWrapper:
 
@@ -15,12 +16,15 @@ class MetaDriveEnvWrapper:
 
         self.reward_function = RewardFunction()
 
+        self.info_builder = InfoBuilder()
+
         self.obs_size: int = None
 
     def reset(self):
+        self.reward_function.reset()
 
         raw_obs, info = self.env.reset()
-
+        info = self._enrich_info(info)
         processed_obs = self.observation_builder.build(
             self.env, raw_obs, info
         )
@@ -36,17 +40,7 @@ class MetaDriveEnvWrapper:
             discrete_action
         )
 
-        raw_obs, _, terminated, truncated, info = self.env.step(
-            continuous_action
-        )
-
-        processed_obs = self.observation_builder.build(
-            self.env, raw_obs, info
-        )
-
-        reward = self.reward_function.compute(info)
-
-        return processed_obs, reward, terminated, truncated, info
+        return self._step_inner(continuous_action)
     
     def close(self):
 
@@ -54,3 +48,27 @@ class MetaDriveEnvWrapper:
 
     def num_actions(self) -> int:
         return self.action_mapper.num_actions()
+
+    @property
+    def agent(self):
+        return self.env.agent
+
+    @property
+    def engine(self):
+        return self.env.engine
+
+    def step_continuous(self, continuous_action):
+        return self._step_inner(continuous_action)
+
+    def _step_inner(self, continuous_action):
+        raw_obs, env_reward, terminated, truncated, info = self.env.step(continuous_action)
+        info = self._enrich_info(info)
+        reward = self.reward_function.compute(info, env_reward, continuous_action)
+        processed_obs = self.observation_builder.build(self.env, raw_obs, info)
+        return processed_obs, reward, terminated, truncated, info
+
+    def _enrich_info(self, info):
+        return self.info_builder.build(self.env, info)
+
+    def get_map(self):
+        return self.env.config["map"]

@@ -31,17 +31,24 @@ class DQNAgent:
         if random.random() <= epsilon and training:
             return random.randint(0, self.num_actions - 1)
         
+        device = next(self.online_net.parameters()).device
+        
         state_t = torch.as_tensor(
-            state, dtype=torch.float32
+            state, dtype=torch.float32, device=device
         ).unsqueeze(0)
+
+        was_training = self.online_net.training
+        self.online_net.eval()
 
         with torch.no_grad():
             q_values = self.online_net(state_t)
-
-        return torch.argmax(q_values).item()
+        self.online_net.train(was_training)
+        return torch.argmax(q_values, dim=1).item()
     
     def update_target_network(self):
 
         self.target_net.load_state_dict(
             self.online_net.state_dict()
         )
+
+        self.target_net.eval()

@@ -7,10 +7,11 @@ from configs.env_config import ENV_CONFIG
 
 def main():
 
-    config = ENV_CONFIG
+    config = dict(ENV_CONFIG)
     config["use_render"] = True
-    config["map"] = "SSSS"
-    config["start_seed"] = 17
+    config["map"] = "SCSC"
+    config["start_seed"] = 0
+    config["traffic_density"] = 0.1
     env = MetaDriveEnvWrapper(config)
     frame_stack = FrameStack(stack_size=4)
     obs, info = env.reset()
@@ -20,10 +21,14 @@ def main():
     action_dim = env.num_actions()
     epsilon_scheduler = EpsilonScheduler(start=0.0, end=0.0, decay=1, warmup_steps=0)
     agent = DQNAgent(state_dim, action_dim, epsilon_scheduler)
-
     checkpoint_path = "checkpoints/final.pt"
-    checkpoint = torch.load(checkpoint_path, weights_only=True)
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     agent.online_net.load_state_dict(checkpoint["online_net"])
+
+    if "target_net" in checkpoint:
+        agent.target_net.load_state_dict(checkpoint["target_net"])
+    else:
+        agent.target_net.load_state_dict(agent.online_net.state_dict())
     agent.online_net.eval()
     done = False
     total_reward = 0
