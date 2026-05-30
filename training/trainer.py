@@ -29,13 +29,13 @@ class Trainer:
         if episode < 200:
             return "SSSS", 0.0
         if episode < 500:
-            return random.choices(["SSSS", "SCSC", "CSCS"], weights=[0.60, 0.20, 0.20])[0], 0.05
+            return random.choices(["SSSS", "SCSC", "CSCS"], weights=[0.50, 0.25, 0.25])[0], 0.05
         if episode < 900:
-            return random.choices(["SCSC", "CSCS"], weights=[0.50, 0.50])[0], 0.1
+            return random.choices(["SSSS", "SCSC", "CSCS"], weights=[0.25, 0.40, 0.35])[0], 0.1
         if episode < 1400:
-            return random.choices(["SCSC", "CSCS", "CCCC"], weights=[0.3, 0.3, 0.4])[0], 0.15
+            return random.choices(["SSSS", "SCSC", "CSCS", "CCCC"], weights=[0.15, 0.25, 0.25, 0.35])[0], 0.15
         if episode < 2000:
-            return random.choices(["CSCS", "CCCC", 4], weights=[0.3, 0.35, 0.35])[0], 0.2
+            return random.choices(["SSSS", "CSCS", "CCCC", 4], weights=[0.10, 0.25, 0.30, 0.35])[0], 0.2
         return random.choices(["SSSS", "SCSC", "CSCS", "CCCC", 4], weights=[0.10, 0.15, 0.15, 0.20, 0.40])[0], 0.25 
 
     def _horizon_for_map(self, target_map) -> int:

@@ -1,0 +1,145 @@
+import torch
+import os
+import random
+from enviornments.metadrive_env import MetaDriveEnvWrapper  
+from agents.dqn_agent import DQNAgent
+from agents.epsilon_scheduler import EpsilonScheduler
+from replay.expert_replay_buffer import ExpertReplayBuffer
+from training.trainer import Trainer
+from training.evaluator import Evaluator
+from training.checkpoint_manager import CheckpointManager
+from utils.logger import Logger
+from configs.env_config import *
+
+CURVE_MAPS = ["SCSC", "CSCS", "CCCC", "4"]
+EVAL_FREQ = 200
+MAX_EPISODES = 4000
+
+def pick_curve_map(episode):
+    if episode < 500:
+        return random.choices(["SCSC", "CSCS"], weights = [0.50, 0.50])[0], 0.0
+    if episode < 1500:
+        return random.choices(["SCSC", "CSCS", "CCCC"], weights=[0.35, 0.35, 0.30])[0], 0.1
+    return random.choices(["SCSC", "CSCS", "CCCC", 4], weights=[0.25, 0.25, 0.25, 0.25])[0], 0.2
+
+def main():
+    env = MetaDriveEnvWrapper(dict(ENV_CONFIG))
+
+    env.reset()
+    obs_size = env.obs_size * FRAME_STACK
+
+    epsilon_scheduler = EpsilonScheduler(**EPSILON_CONFIG)
+
+    agent = DQNAgent(
+        input_size=obs_size, num_actions=env.num_actions(), 
+        epsilon_scheduler=epsilon_scheduler
+    )
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    agent.online_net.to(device)
+    agent.target_net.to(device)
+
+    optimizer = torch.optim.Adam(agent.online_net.parameters(), lr = TRAIN_CONFIG["lr"])
+
+    if not os.path.exists("checkpoints/best_straight.pt"):
+        raise FileNotFoundError("Nema best_straight.pt. Prvo pokreni train_straight.py")
+
+    ckpt = torch.load("checkpoints/best_straight.pt", map_location="cpu", weights_only=True)
+    agent.online_net.load_state_dict(ckpt["online_net"])
+    agent.target_net.load_state_dict(ckpt["target_net"])
+    optimizer.load_state_dict(ckpt["optimizer"])
+    print("[Phase 2] Ucitan best_straight.pt kao polazna tacka")
+    
+    checkpoint_manager = CheckpointManager()
+
+    replay_buffer = ExpertReplayBuffer(
+        capacity=TRAIN_CONFIG["replay_capacity"],
+        expert_dataset_path=EXPERT_DATASET,
+        num_actions=env.num_actions(),
+        expert_ratio=EXPERT_RATIO_CURVE
+    )
+
+    logger = Logger(log_dir="logs")
+
+    trainer = Trainer(
+        env=env, agent=agent, replay_buffer=replay_buffer, optimizer=optimizer, config=TRAIN_CONFIG, logger=logger, scheduler=None
+    )
+
+    evaluator = Evaluator(env, agent, logger)
+
+    best_curve_score = 0.0
+    episode = 0
+    try:
+
+        for episode in range(MAX_EPISODES):
+            target_map, density = pick_curve_map(episode)
+
+            if trainer._last_map != target_map:
+                trainer.env.close()
+                curve_config = dict(ENV_CONFIG)
+                curve_config["map"] = target_map
+                curve_config["traffic_density"] = density
+                curve_config["horizon"] = 1600 if target_map == 4 else 1000
+                curve_config["num_scenarios"] = 50
+                trainer.env = MetaDriveEnvWrapper(curve_config)
+                trainer.env.reward_function.use_soft_out_of_road = True
+                trainer._last_map = target_map
+                evaluator.env = trainer.env
+                print(f"[Curriculum] Ep {episode}: -> {target_map}")
+
+            trainer.run_episode(episode)
+
+            if (episode + 1) % EVAL_FREQ == 0:
+                trainer.env.close()
+                trainer._last_map = None
+
+                results = evaluator.evaluate_maps(
+                    maps=EVAL_MAPS,
+                    episodes_per_map=EVAL_EPISODES_PER_MAP,
+                )
+
+                curve_score = sum(results.get(m, {}).get("success_rate", 0.0) for m in CURVE_MAPS) / len(CURVE_MAPS)
+
+                print(
+                    f"[Eval] Curve composite = {curve_score:.3f} | "
+                    + " | ".join(f"{m}={results.get(m, {}).get('success_rate', 0.0):.2f}" for m in CURVE_MAPS)
+                )
+
+                if curve_score > best_curve_score:
+                    best_curve_score = curve_score
+                    checkpoint_manager.save(
+                        "checkpoints/best_curve.pt",
+                        agent, optimizer, trainer.global_step, episode
+                    )
+                    print(f"[Checkpoint] Novi best_curve.pt: {curve_score:.3f}")
+
+                next_map, next_density = pick_curve_map(episode+1)
+                curve_config = dict(ENV_CONFIG)
+                curve_config["map"] = next_map
+                curve_config["traffic_density"] = next_density
+                curve_config["horizon"] = 1600 if target_map == 4 else 1000
+                curve_config["num_scenarios"] = 50
+                trainer.env = MetaDriveEnvWrapper(curve_config)
+                trainer.env.reward_function.use_soft_out_of_road = True
+                trainer._last_map = target_map
+                evaluator.env = trainer.env
+
+    except KeyboardInterrupt:
+        print("Prekid treninga od strane korisnika.")
+    
+    except Exception as e:
+        import traceback
+        print(f"Greska na epizodi {episode + 1}:")
+        traceback.print_exc()
+
+    finally:
+
+        checkpoint_manager.save(
+            "checkpoints/curve_final.pt", agent, optimizer, trainer.global_step, episode
+        )
+
+        trainer.env.close()
+        logger.close()
+
+if __name__ == "__main__":
+    main()

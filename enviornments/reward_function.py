@@ -36,8 +36,14 @@ class RewardFunction:
 
         jerk_scale = 0.01 if self.use_soft_out_of_road else 0.02
         penalty += abs(throttle - self.prev_throttle) * 0.02
-        steer_w = 0.005 if heading_err > 0.25 else jerk_scale
-        penalty += abs(steering - self.prev_steering) * steer_w
+
+        base_steer_jerk = abs(steering - self.prev_steering)
+        if heading_err > 0.25:
+            steer_w = 0.03 if base_steer_jerk > 10 else 0.005
+        else:
+            steer_w = 0.04
+
+        penalty += base_steer_jerk * steer_w
 
         step_reward += 0.4 * max(0.0, 1.0 - heading_err / self.MAX_HEADING_ERR)
         step_reward += 0.3 * max(0.0, 1.0 - lateral / (self.LANE_WIDTH / 2))

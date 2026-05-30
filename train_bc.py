@@ -8,7 +8,6 @@ from torch.utils.data import Dataset, DataLoader
 from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
 from utils.action_discretizer import continuous_to_discrete
-from configs.dqn_configs import *
 from enviornments.action_mapper import ActionMapper
 from configs.env_config import EXPERT_DATASET, BC_CHECKPOINT, BC_CONFIG, FRAME_STACK
 

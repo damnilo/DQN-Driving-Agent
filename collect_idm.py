@@ -99,7 +99,7 @@ def main():
             if result is None:
                 raise RuntimeError("Neuspesan reset nakon restartovanja env-a")
             
-        raw_obs, info = env.reset()
+        raw_obs, info = result
         stacked_obs = frame_stack.reset(raw_obs)
 
         done = False

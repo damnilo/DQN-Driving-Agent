@@ -20,13 +20,16 @@ class MetaDriveEnvWrapper:
 
         self.obs_size: int = None
 
-    def reset(self):
-        self.reward_function.reset()
+        self._last_discrete_action = 0
 
+    def reset(self):
+        self._last_discrete_action = 0
+        self.reward_function.reset()
+        self.observation_builder.reset()
         raw_obs, info = self.env.reset()
         info = self._enrich_info(info)
         processed_obs = self.observation_builder.build(
-            self.env, raw_obs, info
+            self.env, raw_obs, info, prev_action_idx = 0
         )
 
         if self.obs_size is None:
@@ -35,6 +38,7 @@ class MetaDriveEnvWrapper:
         return processed_obs, info
 
     def step(self, discrete_action):
+        self._last_discrete_action = discrete_action
 
         continuous_action = self.action_mapper.map(
             discrete_action
@@ -64,7 +68,7 @@ class MetaDriveEnvWrapper:
         raw_obs, env_reward, terminated, truncated, info = self.env.step(continuous_action)
         info = self._enrich_info(info)
         reward = self.reward_function.compute(info, env_reward, continuous_action)
-        processed_obs = self.observation_builder.build(self.env, raw_obs, info)
+        processed_obs = self.observation_builder.build(self.env, raw_obs, info, prev_action_idx=self._last_discrete_action)
         return processed_obs, reward, terminated, truncated, info
 
     def _enrich_info(self, info):
