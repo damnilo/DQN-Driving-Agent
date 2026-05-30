@@ -20,22 +20,23 @@ class Trainer:
         self.global_step = 0
         self.scheduler = scheduler
         self._last_map = None
+        self._frozen_at_episode = None
 
         self.agent.online_net.to(self.device)
         self.agent.target_net.to(self.device)
 
     def _pick_map_for_episode(self, episode: int):
         if episode < 200:
-            return "SSSS"
+            return "SSSS", 0.0
         if episode < 500:
-            return random.choices(["SSSS", "SCSC"], weights=[0.60, 0.40])[0]
+            return random.choices(["SSSS", "SCSC", "CSCS"], weights=[0.60, 0.20, 0.20])[0], 0.05
         if episode < 900:
-            return random.choices(["SCSC", "CSCS"], weights=[0.50, 0.50])[0]
+            return random.choices(["SCSC", "CSCS"], weights=[0.50, 0.50])[0], 0.1
         if episode < 1400:
-            return random.choices(["SCSC", "CSCS", "CCCC"], weights=[0.3, 0.3, 0.4])[0]
+            return random.choices(["SCSC", "CSCS", "CCCC"], weights=[0.3, 0.3, 0.4])[0], 0.15
         if episode < 2000:
-            return random.choices(["CSCS", "CCCC", 4], weights=[0.3, 0.35, 0.35])[0]
-        return 4
+            return random.choices(["CSCS", "CCCC", 4], weights=[0.3, 0.35, 0.35])[0], 0.2
+        return random.choices(["SSSS", "SCSC", "CSCS", "CCCC", 4], weights=[0.10, 0.15, 0.15, 0.20, 0.40])[0], 0.25 
 
     def _horizon_for_map(self, target_map) -> int:
         if target_map == "SSSS":
@@ -51,8 +52,7 @@ class Trainer:
         return "straight" if target_map == "SSSS" else "curve"
 
     def set_map(self, episode):
-        target_map = self._pick_map_for_episode(episode)
-        density = 0.0
+        target_map, density = self._pick_map_for_episode(episode)
         horizon = self._horizon_for_map(target_map)
 
         if self._last_map == target_map:
@@ -74,8 +74,9 @@ class Trainer:
         current_config["num_scenarios"] = 50
 
         if old_family == "straight" and new_family == "curve":
-            for param in self.agent.online_net.parameters():
+            for param in self.agent.online_net.shared.parameters():
                 param.requires_grad = False
+                self._frozen_at_episode = episode
 
         from enviornments.metadrive_env import MetaDriveEnvWrapper
 
@@ -99,6 +100,14 @@ class Trainer:
             self.run_episode(episode)
 
     def run_episode(self, episode):
+
+        if self._frozen_at_episode is not None and (episode - self._frozen_at_episode) > 150:
+            for param in self.agent.online_net.shared.parameters():
+                param.requires_grad = True
+            
+            self._frozen_at_episode = None
+            print("[Trainer] Shared layers unfrozen")
+
         start_step = self.global_step
         state, _ = self.env.reset()
         state = self.frame_stack.reset(state)
@@ -110,7 +119,7 @@ class Trainer:
         losses = []
         steps = 0
 
-        early_exit_threshold = -300.0 if self.global_step > 1_000 else -600.0
+        early_exit_threshold = -80 if self._map_family(self._last_map or "SSSS") == "curve" else -300
 
         while not done:
 

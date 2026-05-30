@@ -13,7 +13,7 @@ from enviornments.action_mapper import ActionMapper
 from configs.env_config import EXPERT_DATASET, BC_CHECKPOINT, BC_CONFIG, FRAME_STACK
 
 STRAIGHT_MAPS = {"SSSS"}
-CURVE_MAPS = {"SCSC", "CSCS", "CCCC", 4}
+CURVE_MAPS = {"SCSC", "CSCS", "CCCC", "4"}
 class ExpertDataset(Dataset):
 
     def __init__(self, path, map_family=None):
@@ -75,7 +75,7 @@ class BCTrainer:
     def train(self, train_loader, val_loader, lr=None, tag=""):
 
         cfg = self.config
-        lr = lr or cfg("lr")
+        lr = lr or cfg["lr"]
         optimizer = self._make_optimizer(lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=BC_CONFIG["epochs"], eta_min=1e-5)
         best_val = float("inf")
@@ -163,7 +163,7 @@ def make_loader(dataset_path, map_family=None, batch_size=256, val_split=0.15):
         )
 
         val_loader = DataLoader(
-            train_ds, 
+            val_ds, 
             batch_size=batch_size, 
             shuffle=False, 
             num_workers=0,

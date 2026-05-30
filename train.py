@@ -83,7 +83,7 @@ def main():
             trainer.run_episode(episode)
 
             if episode > 0 and (episode + 1) % EVAL_FREQ == 0:
-                # MetaDrive dozvoljava samo jedan engine — zatvori trening env pre eval-a
+                current_map_name = trainer.env.get_map()
                 trainer.env.close()
                 trainer._last_map = None
 
@@ -92,9 +92,7 @@ def main():
                     episodes_per_map=EVAL_EPISODES_PER_MAP,
                 )
 
-                # Sledeća epizoda ponovo kreira env kroz set_map()
-
-                curr_map = results[env.get_map()]
+                curr_map = results.get(current_map_name, {})
 
                 composite_score = (
                     CHECKPOINT_STRAIGHT_WEIGHT * curr_map["success_rate"]
@@ -105,8 +103,14 @@ def main():
                     f"reward={curr_map['avg_reward']:.2f}"
                 )
 
-                if results.get("SSSS", {}).get("success_rate", 0) >= 0.9:
-                    checkpoint_manager.save("checkpoints/best_straight.pt")
+                if results.get("SSSS", {})["success_rate"] >= 0.9:
+                    checkpoint_manager.save(
+                        "checkpoints/best_straight.pt",
+                        agent,
+                        optimizer,
+                        trainer.global_step,
+                        episode
+                    )
 
             if (episode + 1) % CHECKPOINT_FREQ == 0:
                 path = os.path.join("checkpoints", f"ep_{episode + 1}.pt")
