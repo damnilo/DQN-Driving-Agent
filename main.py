@@ -92,16 +92,25 @@ def main():
     epsilon_scheduler = EpsilonScheduler(start=0.0, end=0.0, decay=1, warmup_steps=0)
     agent = DQNAgent(obs_size, action_dim, epsilon_scheduler)
 
+    curr_checkpoint = None
+
     for map_name in MAPS_TEST:
-        print(f"\n{'=*50'}")
+        print(f"\n{'='*50}")
         print(f"MAP: {map_name}")
         print(f"{'='*50}")
 
-        checkpoint_path = get_checkpoint_for_map()
-        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
-        agent.online_net.load_state_dict(checkpoint["online_net"])
-        agent.target_net.load_state_dict(checkpoint.get("target_net", checkpoint["online_net"]))
-        agent.online_net.eval()
+        checkpoint_path = get_checkpoint_for_map(map_name)
+
+        if checkpoint_path != curr_checkpoint:
+            if not os.path.exists(checkpoint_path):
+                print(f"[WARN] Checkpoint not found: {checkpoint_path}, skipping map.")
+                continue
+            checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+            agent.online_net.load_state_dict(checkpoint["online_net"])
+            agent.target_net.load_state_dict(checkpoint.get("target_net", checkpoint["online_net"]))
+            agent.online_net.eval()
+            curr_checkpoint = checkpoint_path
+            print(f"Loaded: {checkpoint_path}")
 
         successes = 0
 

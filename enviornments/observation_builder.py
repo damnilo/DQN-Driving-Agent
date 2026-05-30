@@ -10,7 +10,6 @@ class ObservationBuilder:
     EXTRA_DIM = 9
 
     def __init__(self):
-        self.prev_action_idx = 0
         self._action_map = None
 
     def reset(self):
@@ -29,7 +28,7 @@ class ObservationBuilder:
         sensor_extras = self._sensor_extras(env)
         hand_extras = self._hand_crafted_extras(info)
 
-        prev_action_feat = np.array([self.prev_action_idx / 28,0], dtype=np.float32)
+        prev_action_feat = np.array([prev_action_idx / 28,0], dtype=np.float32)
 
         return np.concatenate([ego, nav, lidar, sensor_extras, hand_extras, prev_action_feat]).astype(np.float32)
     

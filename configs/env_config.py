@@ -56,12 +56,14 @@ EXPERT_RATIO_CURVE = 0.65
 PRETRAIN_DQN_STEPS = 0
 EXPERT_DATASET = "dataset/expert_dataset.json"
 
-# Evaluacija i čuvanje checkpointa
-EVAL_MAPS = ["SSSS", "SCSC", "CSCS", "CCCC", 4]
 EVAL_EPISODES_PER_MAP = 10
-MIN_CURVE_SUCCESS_TO_SAVE = 0.0
-CHECKPOINT_STRAIGHT_WEIGHT = 0.3
-CHECKPOINT_CURVE_WEIGHT = 0.7
+
+CURVE_EPSILON_CONFIG = {
+    "start": 0.15,
+    "end": 0.02,
+    "decay": 200_000,
+    "warmup_steps": 1_000
+}
 
 EPSILON_CONFIG = {
     "start": 0.50,

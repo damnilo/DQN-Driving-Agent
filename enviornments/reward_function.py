@@ -39,7 +39,7 @@ class RewardFunction:
 
         base_steer_jerk = abs(steering - self.prev_steering)
         if heading_err > 0.25:
-            steer_w = 0.03 if base_steer_jerk > 10 else 0.005
+            steer_w = 0.03 if base_steer_jerk > 0.10 else 0.005
         else:
             steer_w = 0.04
 

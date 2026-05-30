@@ -1,9 +1,6 @@
-from metadrive import MetaDriveEnv
 import torch
 import os
 
-from torch.utils import checkpoint
-from agents import epsilon_scheduler
 from enviornments.metadrive_env import MetaDriveEnvWrapper
 from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler

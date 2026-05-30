@@ -11,7 +11,7 @@ from training.checkpoint_manager import CheckpointManager
 from utils.logger import Logger
 from configs.env_config import *
 
-CURVE_MAPS = ["SCSC", "CSCS", "CCCC", "4"]
+CURVE_MAPS = ["SCSC", "CSCS", "CCCC", 4]
 EVAL_FREQ = 200
 MAX_EPISODES = 4000
 
@@ -28,7 +28,7 @@ def main():
     env.reset()
     obs_size = env.obs_size * FRAME_STACK
 
-    epsilon_scheduler = EpsilonScheduler(**EPSILON_CONFIG)
+    epsilon_scheduler = EpsilonScheduler(**CURVE_EPSILON_CONFIG)
 
     agent = DQNAgent(
         input_size=obs_size, num_actions=env.num_actions(), 
@@ -64,6 +64,7 @@ def main():
     trainer = Trainer(
         env=env, agent=agent, replay_buffer=replay_buffer, optimizer=optimizer, config=TRAIN_CONFIG, logger=logger, scheduler=None
     )
+    trainer._last_map = pick_curve_map(0)[0]
 
     evaluator = Evaluator(env, agent, logger)
 
@@ -94,7 +95,7 @@ def main():
                 trainer._last_map = None
 
                 results = evaluator.evaluate_maps(
-                    maps=EVAL_MAPS,
+                    maps=CURVE_MAPS,
                     episodes_per_map=EVAL_EPISODES_PER_MAP,
                 )
 
