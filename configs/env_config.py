@@ -59,9 +59,9 @@ EXPERT_DATASET = "dataset/expert_dataset.json"
 EVAL_EPISODES_PER_MAP = 10
 
 CURVE_EPSILON_CONFIG = {
-    "start": 0.15,
+    "start": 0.35,
     "end": 0.02,
-    "decay": 200_000,
+    "decay": 350_000,
     "warmup_steps": 1_000
 }
 
