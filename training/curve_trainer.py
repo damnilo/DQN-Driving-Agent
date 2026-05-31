@@ -11,7 +11,7 @@ class CurveTrainer(Trainer):
     def run_episode(self, episode):
         start_step = self.global_step
         state, _ = self.env.reset()
-        state = self.frame_stack.reset()
+        state = self.frame_stack.reset(state)
 
         done = False
         episode_reward = 0.0

@@ -45,12 +45,19 @@ class RewardFunction:
 
         penalty += base_steer_jerk * steer_w
 
-        step_reward += 0.4 * max(0.0, 1.0 - heading_err / self.MAX_HEADING_ERR)
-        step_reward += 0.3 * max(0.0, 1.0 - lateral / (self.LANE_WIDTH / 2))
+        turn_factor = 1.0 - 0.5 * abs(nav_cmd)
+        step_reward += 0.4 * turn_factor * max(0.0, 1.0 - heading_err / self.MAX_HEADING_ERR)
+        step_reward += 0.3 * turn_factor * max(0.0, 1.0 - lateral / (self.LANE_WIDTH / 2))
 
-        if nav_cmd != 0.0 and steering * nav_cmd > 0:
-            turn_bonus = 0.3 * abs(steering) * abs(nav_cmd)
-            step_reward += turn_bonus
+        if nav_cmd != 0.0:
+            if steering * nav_cmd > 0:
+                turn_bonus = 0.6 * abs(steering) * abs(nav_cmd)
+                step_reward += turn_bonus
+            elif steering * nav_cmd < 0:
+                turn_bonus = -0.3 * abs(steering) * abs(nav_cmd)
+                step_reward -= turn_bonus
+            else:
+                step_reward -= 0.3 * abs(nav_cmd)
 
         target_speed = max(6.0, 40.0 * (1.0 - heading_err))
         moving_bonus = min(speed_val, target_speed) * 0.01

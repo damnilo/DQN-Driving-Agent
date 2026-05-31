@@ -38,17 +38,18 @@ def pick_curve_map(episode):
 
 def _horizon_for_map(map):
     if map in ["SCSC", "CSCS"]:
-        return 1000
+        return 1500
     if map == "CCCC":
-        return 1200
+        return 1800
     
-    return 1600
+    return 2000
 
 def main():
     env = MetaDriveEnvWrapper(dict(ENV_CONFIG))
 
     env.reset()
     obs_size = env.obs_size * FRAME_STACK
+    env.close()
 
     epsilon_scheduler = EpsilonScheduler(**CURVE_EPSILON_CONFIG)
 
@@ -63,10 +64,10 @@ def main():
 
     optimizer = torch.optim.Adam(agent.online_net.parameters(), lr = CURVE_TRAIN_CONFIG["lr"])
 
-    if not os.path.exists("checkpoints/best_straight.pt"):
+    if not os.path.exists(BC_CHECKPOINT_CURVE):
         raise FileNotFoundError("Nema best_straight.pt. Prvo pokreni train_straight.py")
 
-    ckpt = torch.load("checkpoints/best_straight.pt", map_location="cpu", weights_only=True)
+    ckpt = torch.load(BC_CHECKPOINT_CURVE, map_location="cpu", weights_only=True)
     agent.online_net.load_state_dict(ckpt["online_net"])
     agent.target_net.load_state_dict(ckpt["target_net"])
 
@@ -78,7 +79,8 @@ def main():
         capacity=CURVE_TRAIN_CONFIG["replay_capacity"],
         expert_dataset_path=EXPERT_DATASET,
         num_actions=env.num_actions(),
-        expert_ratio=EXPERT_RATIO_CURVE
+        expert_ratio=EXPERT_RATIO_CURVE,
+        map_filter={"SCSC", "CSCS", "CCCC", "4"}
     )
 
     logger = Logger(log_dir="logs")
@@ -102,6 +104,13 @@ def main():
 
     best_curve_score = 0.0
     episode = 0
+
+    import json
+    with open(EXPERT_DATASET, "r") as f:
+        sample = json.load(f)[0]
+    obs = np.array(sample["observation"], dtype=np.float32)
+    print(f"[Sanity] Expert obs shape: {obs.shape}")
+    print(f"[Sanity] Expected: ({obs_size},)")
     try:
 
         for episode in range(MAX_EPISODES):
@@ -150,11 +159,11 @@ def main():
                 curve_config = dict(ENV_CONFIG)
                 curve_config["map"] = next_map
                 curve_config["traffic_density"] = next_density
-                curve_config["horizon"] = 1600 if target_map == 4 else 1000
+                curve_config["horizon"] = _horizon_for_map(next_map)
                 curve_config["num_scenarios"] = 50
                 trainer.env = MetaDriveEnvWrapper(curve_config)
                 trainer.env.reward_function.use_soft_out_of_road = True
-                trainer._last_map = target_map
+                trainer._last_map = next_map
                 evaluator.env = trainer.env
 
     except KeyboardInterrupt:

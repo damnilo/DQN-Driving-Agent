@@ -82,7 +82,8 @@ EPSILON_CONFIG = {
 
 CHECKPOINT_FREQ = 100
 EVAL_FREQ = 200
-BC_CHECKPOINT = "checkpoints/bc_pretrain.pt"
+BC_CHECKPOINT_STRAIGHT = "checkpoints/bc_pretrain_straight.pt"
+BC_CHECKPOINT_CURVE = "checkpoints/bc_pretrain_curve.pt"
 
 BC_CONFIG = {
     "epochs": 120,

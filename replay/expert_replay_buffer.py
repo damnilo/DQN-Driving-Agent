@@ -28,7 +28,7 @@ class ExpertReplayBuffer:
 
         self._load_expert_data(expert_dataset_path)
 
-    def _load_expert_data(self, path: str) -> None:
+    def _load_expert_data(self, path: str, map_filter=None) -> None:
 
         if not path:
             return
@@ -52,6 +52,10 @@ class ExpertReplayBuffer:
         transition = []
 
         for i, item in enumerate(raw):
+            
+            if map_filter and str(item.get("map", "")) not in map_filter:
+                continue
+
             obs = np.array(item["observation"], dtype=np.float32)
             next_obs = np.array(item["next_observation"], dtype=np.float32)
 

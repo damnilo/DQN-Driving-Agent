@@ -28,13 +28,13 @@ def reset_with_timeout(env, timeout=30):
 def map_for_episode(episode, num_episodes):
     ratio = episode / max(1, num_episodes)
 
-    if ratio < 0.1:
+    if ratio < 0.05:
         return "SSSS"
-    elif ratio < 0.35:
+    elif ratio < 0.40:
         return "SCSC"
-    elif ratio < 0.60:
+    elif ratio < 0.65:
         return "CSCS"
-    elif ratio < 0.80:
+    elif ratio < 0.82:
         return "CCCC"
     return 4
 

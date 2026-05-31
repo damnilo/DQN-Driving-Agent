@@ -21,7 +21,7 @@ def run_episode(env, agent, render=True):
     frame_stack = FrameStack(stack_size=4)
 
     obs, info = env.reset()
-    obs = frame_stack.reset()
+    obs = frame_stack.reset(obs)
 
     next_obs, _, term, trunc, info = env.step_continuous([0.0, 0.3])
     if not (term or trunc):

@@ -9,7 +9,7 @@ from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
 from utils.action_discretizer import continuous_to_discrete
 from enviornments.action_mapper import ActionMapper
-from configs.env_config import EXPERT_DATASET, BC_CHECKPOINT, BC_CONFIG, FRAME_STACK
+from configs.env_config import EXPERT_DATASET, BC_CONFIG, BC_CHECKPOINT_CURVE, BC_CHECKPOINT_STRAIGHT
 
 STRAIGHT_MAPS = {"SSSS"}
 CURVE_MAPS = {"SCSC", "CSCS", "CCCC", "4"}
@@ -60,11 +60,12 @@ class ExpertDataset(Dataset):
     
 class BCTrainer:
 
-    def __init__(self, agent, config, obs_size):
+    def __init__(self, agent, config, obs_size, checkpoint_path):
 
         self.agent = agent
         self.config = config
         self.obs_size = obs_size
+        self.checkpoint_path = checkpoint_path
 
         self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     
@@ -127,11 +128,11 @@ class BCTrainer:
         self._load_best()
     
     def _save_best(self):
-        os.makedirs(os.path.dirname(BC_CHECKPOINT), exist_ok=True)
-        torch.save(self.agent.online_net.state_dict(), BC_CHECKPOINT)
+        os.makedirs(os.path.dirname(self.checkpoint_path), exist_ok=True)
+        torch.save(self.agent.online_net.state_dict(), self.checkpoint_path)
 
     def _load_best(self):
-        self.agent.online_net.load_state_dict(torch.load(BC_CHECKPOINT, map_location="cpu", weights_only=True))
+        self.agent.online_net.load_state_dict(torch.load(self.checkpoint_path, map_location="cpu", weights_only=True))
         self.agent.target_net.load_state_dict(self.agent.online_net.state_dict())
 
     
@@ -189,16 +190,18 @@ def main():
         epsilon_scheduler=epsilon_scheduler
     )
 
-    trainer = BCTrainer(agent, BC_CONFIG, obs_size)
+    straight_trainer = BCTrainer(agent, BC_CONFIG, obs_size, checkpoint_path=BC_CHECKPOINT_STRAIGHT)
 
     if straight_train:
-        trainer.train(straight_train, straight_val, lr=BC_CONFIG["lr"], tag="straight")
+        straight_trainer.train(straight_train, straight_val, lr=BC_CONFIG["lr"], tag="straight")
     else:
         print("[BC] No straight data found")
 
     curve_train, curve_val, curve_ds = make_loader(EXPERT_DATASET, map_family="curve")
+
+    curve_trainer = BCTrainer(agent, BC_CONFIG, obs_size, checkpoint_path=BC_CHECKPOINT_CURVE)
     if curve_train:
-        trainer.train(curve_train, curve_val, lr = BC_CONFIG["lr"] * 0.3, tag="curve")
+        curve_trainer.train(curve_train, curve_val, lr = BC_CONFIG["lr"] * 0.3, tag="curve")
 
 if __name__ == "__main__":
     main()

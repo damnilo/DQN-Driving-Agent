@@ -33,11 +33,11 @@ def main():
 
     optimizer = torch.optim.Adam(agent.online_net.parameters(), lr=TRAIN_CONFIG["lr"])
 
-    if os.path.exists(BC_CHECKPOINT):
-        bc_state = torch.load(BC_CHECKPOINT, map_location="cpu", weights_only=True)
+    if os.path.exists(BC_CHECKPOINT_STRAIGHT):
+        bc_state = torch.load(BC_CHECKPOINT_STRAIGHT, map_location="cpu", weights_only=True)
         agent.online_net.load_state_dict(bc_state)
         agent.target_net.load_state_dict(agent.online_net.state_dict())
-        print(f"[BC] Ucitan checkpoint: {BC_CHECKPOINT}")
+        print(f"[BC] Ucitan checkpoint: {BC_CHECKPOINT_STRAIGHT}")
 
     checkpoint_manager = CheckpointManager()
 
