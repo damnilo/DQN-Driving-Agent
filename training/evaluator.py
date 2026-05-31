@@ -15,10 +15,10 @@ class Evaluator:
         if map_name == "SSSS":
             return 800
         if map_name in ("SCSC", "CSCS"):
-            return 1000
+            return 1500
         if map_name == "CCCC":
-            return 1200
-        return 1600
+            return 1800
+        return 2000
 
     def _make_env_for_map(self, map_name):
         config = dict(ENV_CONFIG)

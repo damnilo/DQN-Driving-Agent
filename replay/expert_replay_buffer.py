@@ -14,7 +14,7 @@ Transition = Tuple[
 
 class ExpertReplayBuffer:
 
-    def __init__(self, capacity: int, expert_dataset_path: str, num_actions: int, expert_ratio: float = 0.25):
+    def __init__(self, capacity: int, expert_dataset_path: str, num_actions: int, expert_ratio: float = 0.25, map_filter=None):
 
         self.capacity = capacity
         self.num_actions = num_actions
@@ -26,7 +26,7 @@ class ExpertReplayBuffer:
 
         self._action_map = ActionMapper().action
 
-        self._load_expert_data(expert_dataset_path)
+        self._load_expert_data(expert_dataset_path, map_filter)
 
     def _load_expert_data(self, path: str, map_filter=None) -> None:
 

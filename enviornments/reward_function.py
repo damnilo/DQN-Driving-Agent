@@ -54,7 +54,7 @@ class RewardFunction:
                 turn_bonus = 0.6 * abs(steering) * abs(nav_cmd)
                 step_reward += turn_bonus
             elif steering * nav_cmd < 0:
-                turn_bonus = -0.3 * abs(steering) * abs(nav_cmd)
+                turn_bonus = 0.3 * abs(steering) * abs(nav_cmd)
                 step_reward -= turn_bonus
             else:
                 step_reward -= 0.3 * abs(nav_cmd)

@@ -54,7 +54,7 @@ def main():
     epsilon_scheduler = EpsilonScheduler(**CURVE_EPSILON_CONFIG)
 
     agent = DQNAgent(
-        input_size=obs_size, num_actions=env.num_actions(), 
+        input_size=obs_size, num_actions=ActionMapper_num_actions(), 
         epsilon_scheduler=epsilon_scheduler
     )
 
@@ -68,8 +68,8 @@ def main():
         raise FileNotFoundError("Nema best_straight.pt. Prvo pokreni train_straight.py")
 
     ckpt = torch.load(BC_CHECKPOINT_CURVE, map_location="cpu", weights_only=True)
-    agent.online_net.load_state_dict(ckpt["online_net"])
-    agent.target_net.load_state_dict(ckpt["target_net"])
+    agent.online_net.load_state_dict(ckpt)
+    agent.target_net.load_state_dict(ckpt)
 
     print("[Phase 2] Ucitan best_straight.pt kao polazna tacka")
     
