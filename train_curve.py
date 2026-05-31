@@ -65,20 +65,20 @@ def main():
     optimizer = torch.optim.Adam(agent.online_net.parameters(), lr = CURVE_TRAIN_CONFIG["lr"])
 
     if not os.path.exists(BC_CHECKPOINT_CURVE):
-        raise FileNotFoundError("Nema best_straight.pt. Prvo pokreni train_straight.py")
+        raise FileNotFoundError("Nema bc_pretrain_curve.pt. Prvo pokreni train_straight.py")
 
     ckpt = torch.load(BC_CHECKPOINT_CURVE, map_location="cpu", weights_only=True)
     agent.online_net.load_state_dict(ckpt)
     agent.target_net.load_state_dict(ckpt)
 
-    print("[Phase 2] Ucitan best_straight.pt kao polazna tacka")
+    print("[Phase 2] Ucitan bc_pretrain_curve.pt kao polazna tacka")
     
     checkpoint_manager = CheckpointManager()
 
     replay_buffer = ExpertReplayBuffer(
         capacity=CURVE_TRAIN_CONFIG["replay_capacity"],
         expert_dataset_path=EXPERT_DATASET,
-        num_actions=env.num_actions(),
+        num_actions=ActionMapper_num_actions(),
         expert_ratio=EXPERT_RATIO_CURVE,
         map_filter={"SCSC", "CSCS", "CCCC", "4"}
     )
@@ -105,12 +105,6 @@ def main():
     best_curve_score = 0.0
     episode = 0
 
-    import json
-    with open(EXPERT_DATASET, "r") as f:
-        sample = json.load(f)[0]
-    obs = np.array(sample["observation"], dtype=np.float32)
-    print(f"[Sanity] Expert obs shape: {obs.shape}")
-    print(f"[Sanity] Expected: ({obs_size},)")
     try:
 
         for episode in range(MAX_EPISODES):
