@@ -42,7 +42,6 @@ ENV_CONFIG = {
 FRAME_STACK = 4
 
 TRAIN_CONFIG = {
-    "num_episodes": 6000,
     "batch_size": 64,
     "gamma" : 0.99,
     "lr": 1e-4,
@@ -51,17 +50,26 @@ TRAIN_CONFIG = {
     "target_update_freq": None
 }
 
+CURVE_TRAIN_CONFIG = {
+    "batch_size": 32,
+    "gamma": 0.97,
+    "lr": 5e-6,
+    "replay_capacity": 150_000,
+    "min_replay_size": 1_000,
+    "target_update_freq": None
+}
+
 EXPERT_RATIO = 0.3
-EXPERT_RATIO_CURVE = 0.65
+EXPERT_RATIO_CURVE = 0.35
 PRETRAIN_DQN_STEPS = 0
 EXPERT_DATASET = "dataset/expert_dataset.json"
 
 EVAL_EPISODES_PER_MAP = 10
 
 CURVE_EPSILON_CONFIG = {
-    "start": 0.35,
-    "end": 0.02,
-    "decay": 350_000,
+    "start": 0.60,
+    "end": 0.05,
+    "decay": 400_000,
     "warmup_steps": 1_000
 }
 

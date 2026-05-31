@@ -8,6 +8,9 @@ from configs.env_config import ENV_CONFIG, EXPERT_RATIO, EXPERT_RATIO_CURVE
 
 class Trainer:
 
+    MIN_STEPS_BEFORE_EXIT = 0
+    EARLY_EXIT_THRESHOLD = -300
+
     def __init__(self, env, agent, replay_buffer, optimizer, config, logger, scheduler):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.env = env
@@ -20,7 +23,6 @@ class Trainer:
         self.global_step = 0
         self.scheduler = scheduler
         self._last_map = None
-        self._frozen_at_episode = None
 
         self.agent.online_net.to(self.device)
         self.agent.target_net.to(self.device)
@@ -73,11 +75,6 @@ class Trainer:
         current_config["start_seed"] = 0
         current_config["num_scenarios"] = 50
 
-        if old_family == "straight" and new_family == "curve":
-            for param in self.agent.online_net.shared.parameters():
-                param.requires_grad = False
-                self._frozen_at_episode = episode
-
         from enviornments.metadrive_env import MetaDriveEnvWrapper
 
         self.env = MetaDriveEnvWrapper(current_config)
@@ -100,14 +97,6 @@ class Trainer:
             self.run_episode(episode)
 
     def run_episode(self, episode):
-
-        if self._frozen_at_episode is not None and (episode - self._frozen_at_episode) > 150:
-            for param in self.agent.online_net.shared.parameters():
-                param.requires_grad = True
-            
-            self._frozen_at_episode = None
-            print("[Trainer] Shared layers unfrozen")
-
         start_step = self.global_step
         state, _ = self.env.reset()
         state = self.frame_stack.reset(state)
@@ -118,8 +107,6 @@ class Trainer:
 
         losses = []
         steps = 0
-
-        early_exit_threshold = -80 if self._map_family(self._last_map or "SSSS") == "curve" else -300
 
         while not done:
 
@@ -161,7 +148,7 @@ class Trainer:
             for target_param, online_param in zip(self.agent.target_net.parameters(), self.agent.online_net.parameters()):
                 target_param.data.copy_(tau * online_param.data + (1.0 - tau) * target_param.data)
 
-            if episode_reward < early_exit_threshold and self.global_step > 300:
+            if steps >= self.MIN_STEPS_BEFORE_EXIT and episode_reward < self.EARLY_EXIT_THRESHOLD and self.global_step > 300:
                 print("[Trainer] Epizoda zavrsena ranije zbog loseg ucenja...")
                 done = True
 
