@@ -7,45 +7,47 @@ from torch.utils.data import Dataset, DataLoader
 
 from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
-from utils.action_discretizer import continuous_to_discrete
+from utils.action_discretizer import discretize_action
 from enviornments.action_mapper import ActionMapper
-from configs.env_config import EXPERT_DATASET, BC_CONFIG, BC_CHECKPOINT_CURVE, BC_CHECKPOINT_STRAIGHT
+from configs.env_config import *
 
 STRAIGHT_MAPS = {"SSSS"}
 CURVE_MAPS = {"SCSC", "CSCS", "CCCC", "4"}
 class ExpertDataset(Dataset):
 
     def __init__(self, path, map_family=None):
+        data = np.load(path, allow_pickle=False)
 
-        self.action_map = ActionMapper().action
-        with open(path, "r") as f:
-            raw = json.load(f)
+        obs_all = data["obs"]
+        actions_all = data["actions"]
+        maps_all = data["maps"]
+
+        if maps_all.dtype.kind in ("S", "V"):
+            maps_all = np.array([m.decode("utf-8").rstrip("\x00") for m in maps_all])
 
         valid_observations = []
         valid_actions = []
 
-        for item in raw:
+        for i in range(len(obs_all)):
+            map_str = str(maps_all[i])
 
-            if map_family == "straight" and str(item.get("map")) not in STRAIGHT_MAPS:
+            if map_family == "straight" and map_str not in STRAIGHT_MAPS:
                 continue
-            if map_family == "curve" and str(item.get("map")) not in {str(m) for m in CURVE_MAPS}:
-                continue
-
-            discrete_action = continuous_to_discrete(item["action_steering"], item["action_throttle"], self.action_map)
-
-            if discrete_action == 2 and abs(item["action_throttle"]) < 1e-3:
+            if map_family == "curve" and map_str not in {str(m) for m in CURVE_MAPS}:
                 continue
 
-            obs_array = np.array(item["observation"], dtype=np.float32)
+            discrete_action = discretize_action(float(actions_all[i][0]), float(actions_all[i][1]))
+
+            obs_array = np.array(obs_all[i], dtype=np.float32)
             valid_observations.append(obs_array)
             valid_actions.append(discrete_action)
 
         if len(valid_actions) == 0:
             print("\n[UPOZORENJE] Filter akcija je izbacio previše frejmova. Vraćam sirove podatke.")
-            for item in raw:
-                obs_array = np.array(item["observation"], dtype=np.float32)
+            for i in range(len(obs_all)):
+                obs_array = np.array(obs_all[i], dtype=np.float32)
                 valid_observations.append(obs_array)
-                valid_actions.append(continuous_to_discrete(item["action_steering"], item["action_throttle"], self.action_map))
+                valid_actions.append(discretize_action(float(actions_all[i][0]), float(actions_all[i][1])))
 
         self.observations = torch.tensor(np.array(valid_observations), dtype=torch.float32)
         self.actions = torch.tensor(valid_actions, dtype=torch.long)
@@ -77,7 +79,7 @@ class BCTrainer:
         cfg = self.config
         lr = lr or cfg["lr"]
         optimizer = self._make_optimizer(lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=BC_CONFIG["epochs"], eta_min=1e-5)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg["epochs"], eta_min=1e-5)
         best_val = float("inf")
         no_improve = 0
 
@@ -86,14 +88,13 @@ class BCTrainer:
             train_loss = 0.0
 
             for obs_batch, action_batch in train_loader:
-                logits = self.agent.online_net(obs_batch)
+                action_logits = self.agent.online_net(obs_batch)
 
-                loss = self.criterion(logits, action_batch)
+                loss = self.criterion(action_logits, action_batch)
 
                 optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(self.agent.online_net.parameters(),
-                                          cfg["clip_grad"])
+                nn.utils.clip_grad_norm_(self.agent.online_net.parameters(), cfg["clip_grad"])
 
                 optimizer.step()
                 train_loss += loss.item()
@@ -105,8 +106,8 @@ class BCTrainer:
 
             with torch.no_grad():
                 for obs_batch, action_batch in val_loader:
-                    logits = self.agent.online_net(obs_batch)
-                    val_loss += self.criterion(logits, action_batch).item()
+                    action_logits = self.agent.online_net(obs_batch)
+                    val_loss += self.criterion(action_logits, action_batch).item()
 
             val_loss /= len(val_loader)
             scheduler.step()
@@ -145,19 +146,10 @@ def make_loader(dataset_path, map_family=None, batch_size=256, val_split=0.15):
         train_size = len(ds) - val_size
         train_ds, val_ds = torch.utils.data.random_split(ds, [train_size, val_size])
 
-        train_labels = [ds.actions[i].item() for i in train_ds.indices]
-        num_actions = ActionMapper().num_actions()
-        class_count = torch.bincount(torch.tensor(train_labels, dtype=torch.long), minlength=num_actions)
-        class_weights = 1.0 / (class_count.float().sqrt() + 1e-5)
-        class_weights[class_count == 0] = 0.0
-        class_weights /= class_weights.sum()
-        sample_weights = [class_weights[l].item() for l in train_labels]
-        sampler = torch.utils.data.WeightedRandomSampler(sample_weights, len(sample_weights), replacement=True)
-
         train_loader = DataLoader(
             train_ds, 
             batch_size=batch_size, 
-            sampler=sampler, 
+            shuffle=True, 
             num_workers=0,
             pin_memory=torch.cuda.is_available()
         )
@@ -173,10 +165,20 @@ def make_loader(dataset_path, map_family=None, batch_size=256, val_split=0.15):
         return train_loader, val_loader, ds
 
 def main():
-    if not os.path.exists(EXPERT_DATASET):
+    if not os.path.exists(EXPERT_DATASET.replace(".json", ".npz")):
         raise FileNotFoundError
     
-    straight_train, straight_val, straight_ds = make_loader(EXPERT_DATASET, map_family="straight")
+    data = np.load(EXPERT_DATASET.replace(".json", ".npz"), allow_pickle=False)
+    lengths = [len(x) for x in data["obs"]]
+    print("unique obs lengths:", np.unique(lengths))
+    print("first obs:", data["obs"][0])
+    
+    straight_train, straight_val, straight_ds = make_loader(
+        EXPERT_DATASET.replace(".json", ".npz"),
+        map_family="straight", 
+        batch_size=STRAIGHT_BC_CONFIG["batch_size"],
+        val_split=STRAIGHT_BC_CONFIG["val_split"]
+    )
 
     obs_size = straight_ds.observations.shape[1]
 
@@ -190,18 +192,18 @@ def main():
         epsilon_scheduler=epsilon_scheduler
     )
 
-    straight_trainer = BCTrainer(agent, BC_CONFIG, obs_size, checkpoint_path=BC_CHECKPOINT_STRAIGHT)
+    straight_trainer = BCTrainer(agent, STRAIGHT_BC_CONFIG, obs_size, checkpoint_path=BC_CHECKPOINT_STRAIGHT)
 
     if straight_train:
-        straight_trainer.train(straight_train, straight_val, lr=BC_CONFIG["lr"], tag="straight")
+        straight_trainer.train(straight_train, straight_val, lr=STRAIGHT_BC_CONFIG["lr"], tag="straight")
     else:
         print("[BC] No straight data found")
 
-    curve_train, curve_val, curve_ds = make_loader(EXPERT_DATASET, map_family="curve")
+    curve_train, curve_val, curve_ds = make_loader(EXPERT_DATASET.replace(".json", ".npz"), map_family="curve")
 
-    curve_trainer = BCTrainer(agent, BC_CONFIG, obs_size, checkpoint_path=BC_CHECKPOINT_CURVE)
+    curve_trainer = BCTrainer(agent, CURVE_BC_CONFIG, obs_size, checkpoint_path=BC_CHECKPOINT_CURVE)
     if curve_train:
-        curve_trainer.train(curve_train, curve_val, lr = BC_CONFIG["lr"] * 0.3, tag="curve")
+        curve_trainer.train(curve_train, curve_val, lr = CURVE_BC_CONFIG["lr"] * 0.3, tag="curve")
 
 if __name__ == "__main__":
     main()

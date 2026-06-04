@@ -1,4 +1,3 @@
-import json
 import os
 import numpy as np
 from enviornments.metadrive_env import MetaDriveEnvWrapper
@@ -15,7 +14,7 @@ def normalize_action(steering, throttle):
     throttle = float(np.clip(throttle / 1.0, -0.5, 1.0))
     return steering, throttle
 
-def reset_with_timeout(env, timeout=30):
+def reset_with_timeout(env):
     # MetaDrive / Panda3D must be reset from the main interpreter thread.
     # The previous threaded approach caused `signal only works in main thread`.
     try:
@@ -38,21 +37,8 @@ def map_for_episode(episode, num_episodes):
         return "CCCC"
     return 4
 
-def make_json_safe(obj):
-
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    
-    if isinstance(obj, dict):
-        return {
-            k: make_json_safe(v)
-            for k, v in obj.items()
-        }
-    
-    if isinstance(obj, list):
-        return [make_json_safe(v) for v in obj]
-    
-    return obj
+def round_obs(arr, decimals=5):
+    return np.round(arr, decimals).tolist()
 
 def main():
 
@@ -64,7 +50,8 @@ def main():
     base_config["accident_prob"] = 0.0
     
     frame_stack = FrameStack(stack_size=4)
-    dataset = []
+    
+    episodes = []
 
     curr_map = None
     env = None
@@ -78,8 +65,8 @@ def main():
 
             collect_config = dict(base_config)
             collect_config["map"] = target_map
-            collect_config["start_seed"] = episode * 50
-            collect_config["num_scenarios"] = 50
+            collect_config["start_seed"] = episode * 20
+            collect_config["num_scenarios"] = 20
 
             env = MetaDriveEnvWrapper(collect_config)
             curr_map = target_map
@@ -108,6 +95,12 @@ def main():
 
         total_reward = 0.0
 
+        obs_list = [round_obs(stacked_obs, decimals=4)]
+        actions = []
+        rewards = []
+        dones = []
+        infos = []
+
         while not done:
 
             action = env.engine.get_policy(env.agent.id).act()
@@ -117,31 +110,31 @@ def main():
             next_state = frame_stack.step(next_obs)
             done = terminated or truncated
 
-
-            dataset.append({
-                "episode_id": episode,
-                "step": episode_steps,
-                "map": curr_map,
-                "observation": stacked_obs.tolist(),
-                "next_observation": next_state.tolist(),
-                "action_steering": norm_steering,
-                "action_throttle": norm_throttle,
-                "reward": float(reward),
-                "done": bool(done),
-                "terminated": bool(terminated),
-                "truncated": bool(truncated),
-                "velocity": float(next_info.get("velocity", 0.0)),
-                "heading_error": float(next_info.get("heading_error", 0.0)),
-                "lateral_offset": float(next_info.get("lateral_offset", 0.0)),
-                "navigation_command": next_info.get("navigation_command", "IDLE"),
-                "arrive_dest": bool(next_info.get("arrive_dest", False)),
-                "crash": bool(next_info.get("crash", False)),
-                "out_of_road": bool(next_info.get("out_of_road", False)),
+            obs_list.append(round_obs(next_state, decimals=4))
+            actions.append([round(norm_steering, 5), round(norm_throttle, 5)])
+            rewards.append(round(float(reward), 5))
+            dones.append(bool(done))
+            infos.append({
+                "velocity": round(float(info.get("velocity", 0.0)), 5),
+                "arrive_dest": bool(info.get("arrive_dest", False)),
+                "crash": bool(info.get("crash", False)),
+                "out_of_road": bool(info.get("out_of_road", False)),
             })
 
             stacked_obs = next_state
             total_reward += reward
             episode_steps += 1
+
+        episodes.append({
+            "episode_id": episode,
+            "map": curr_map,
+            "total_reward": round(float(total_reward), 5),
+            "obs": obs_list,
+            "actions": actions,
+            "rewards": rewards,
+            "dones": dones,
+            "infos": infos
+        })
 
         print(f"[Dataset]"
               f"Episode {episode+1:03d}"
@@ -150,14 +143,22 @@ def main():
               flush=True)
         
     
-    tmp_path = EXPERT_DATASET + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(make_json_safe(dataset), f)
+    print(episodes[0].keys())
+    all_obs = np.array([obs for ep in episodes for obs in ep["obs"][:-1]], dtype=np.float32)
+    all_next_obs = np.array([obs for ep in episodes for obs in ep["obs"][1:]], dtype=np.float32)
+    all_actions = np.array([a for ep in episodes for a in ep["actions"]], dtype=np.float32)
+    all_rewards = np.array([r for ep in episodes for r in ep["rewards"]], dtype=np.float32)
+    all_dones = np.array([d for ep in episodes for d in ep["dones"]], dtype=bool)
+    all_maps = np.array([ep["map"] for ep in episodes for _ in ep["actions"]], dtype="U4")
 
-    os.replace(tmp_path, EXPERT_DATASET)
-    print(f"[Dataset] Sacuvano {len(dataset)} tranzicija u {EXPERT_DATASET}")
-
-    env.close()
+    np.savez_compressed(EXPERT_DATASET.replace(".json", ".npz"),
+        obs=all_obs,
+        next_obs=all_next_obs,
+        actions=all_actions,
+        rewards=all_rewards,
+        dones=all_dones,
+        maps=all_maps,
+    )
 
 if __name__ == "__main__":
     main()

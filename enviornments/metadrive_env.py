@@ -50,7 +50,7 @@ class MetaDriveEnvWrapper:
 
         self.env.close()
 
-    def num_actions(self) -> int:
+    def num_actions(self):
         return self.action_mapper.num_actions()
 
     @property
@@ -67,7 +67,7 @@ class MetaDriveEnvWrapper:
     def _step_inner(self, continuous_action):
         raw_obs, env_reward, terminated, truncated, info = self.env.step(continuous_action)
         info = self._enrich_info(info)
-        reward = self.reward_function.compute(info, env_reward, continuous_action)
+        reward = self.reward_function.compute(info, env_reward)
         processed_obs = self.observation_builder.build(self.env, raw_obs, info, prev_action_idx=self._last_discrete_action)
         return processed_obs, reward, terminated, truncated, info
 

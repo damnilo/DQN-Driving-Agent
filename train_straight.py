@@ -2,6 +2,7 @@ import torch
 import os
 
 from enviornments.metadrive_env import MetaDriveEnvWrapper
+from enviornments.action_mapper import ActionMapper
 from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
 from replay.expert_replay_buffer import ExpertReplayBuffer
@@ -12,7 +13,7 @@ from utils.logger import Logger
 from configs.env_config import *
 
 TARGET_SUCCESS = 0.90
-EVAL_FREQ = 100
+EVAL_FREQ = 80
 MAX_EPISODES = 2000
 
 def main():
@@ -21,9 +22,10 @@ def main():
     obs_size = env.obs_size * FRAME_STACK
 
     epsilon_scheduler = EpsilonScheduler(**EPSILON_CONFIG)
+    num_actions = ActionMapper().num_actions()
     agent = DQNAgent(
         input_size = obs_size,
-        num_actions = env.num_actions(),
+        num_actions = num_actions,
         epsilon_scheduler=epsilon_scheduler
     )
 
@@ -44,7 +46,7 @@ def main():
     replay_buffer = ExpertReplayBuffer(
         capacity = TRAIN_CONFIG["replay_capacity"],
         expert_dataset_path = EXPERT_DATASET,
-        num_actions = env.num_actions(),
+        num_actions = num_actions,
         expert_ratio = EXPERT_RATIO
     )
 
@@ -61,7 +63,7 @@ def main():
     straight_config = dict(ENV_CONFIG)
     straight_config["map"] = "SSSS"
     straight_config["horizon"] = 800
-    straight_config["num_scenarios"] = 50
+    straight_config["num_scenarios"] = 20
     straight_config["traffic_density"] = 0.0
     trainer.env.close()
     trainer.env = MetaDriveEnvWrapper(straight_config)

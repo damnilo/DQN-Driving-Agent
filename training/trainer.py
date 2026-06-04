@@ -73,7 +73,7 @@ class Trainer:
         current_config["traffic_density"] = density
         current_config["horizon"] = horizon
         current_config["start_seed"] = 0
-        current_config["num_scenarios"] = 50
+        current_config["num_scenarios"] = 20
 
         from enviornments.metadrive_env import MetaDriveEnvWrapper
 
@@ -169,37 +169,33 @@ class Trainer:
     
     def train_step(self, batch):
 
-        states, actions, rewards, next_states, dones = batch
+        states, actions, rewards, next_states, dones, indicies, weights = batch
 
         states_t = torch.as_tensor(states, dtype=torch.float32, device=self.device)
-        actions_t = torch.as_tensor(actions, dtype=torch.int64, device=self.device).unsqueeze(1)
-        rewards_t = torch.as_tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)
-        dones_t = torch.as_tensor(dones, dtype=torch.float32, device=self.device).unsqueeze(1)
+        actions_t = torch.as_tensor(actions, dtype=torch.int64, device=self.device)
+        rewards_t = torch.as_tensor(rewards, dtype=torch.float32, device=self.device)
+        dones_t = torch.as_tensor(dones, dtype=torch.float32, device=self.device)
         next_states_t = torch.as_tensor(next_states, dtype=torch.float32, device=self.device)
+        weights_t = torch.as_tensor(weights, dtype=torch.float32, device=self.device)
 
         with torch.no_grad():
-            was_training = self.agent.online_net.training
-            self.agent.online_net.eval()
-
             next_action = self.agent.online_net(next_states_t).argmax(dim=1, keepdim=True)
-            target_q_values = self.agent.target_net(next_states_t)
-            max_target_q_values = target_q_values.gather(1, next_action)
+            target_q = self.agent.target_net(next_states_t)
+            max_target_q = target_q.gather(1, next_action).squeeze(1)
 
-            self.agent.online_net.train(was_training)
+            targets = rewards_t + (1.0 - dones_t) * self.config["gamma"] * max_target_q
+            targets = torch.clamp(targets, -100.0, 100.0)
 
-            targets = rewards_t + (self.config["gamma"] * (1 - dones_t) * max_target_q_values)
+        action_q = self.agent.online_net(states_t)
 
-            targets = torch.clamp(targets, min=-500.0, max=500.0)
-
-        q_values = self.agent.online_net(states_t)
-
-        if torch.isnan(q_values).any():
+        if torch.isnan(action_q).any():
             print("NaN Q Values")
             return 0.0
 
-        actions_q_values = torch.gather(q_values, dim=1, index=actions_t)
+        action_q = action_q.gather(1, actions_t.unsqueeze(1)).squeeze(1)
 
-        loss = torch.nn.functional.smooth_l1_loss(actions_q_values, targets)
+        elementwise_loss = torch.nn.functional.smooth_l1_loss(action_q, targets, reduction='none')
+        loss = (weights_t * elementwise_loss).mean()
 
         if torch.isnan(loss).any():
             print("Nan Loss Detected!")
@@ -211,4 +207,6 @@ class Trainer:
         torch.nn.utils.clip_grad_norm_(self.agent.online_net.parameters(), 1.0)
         
         self.optimizer.step()
+        td_errors = (action_q - targets).detach().cpu().numpy()
+        self.replay_buffer.update_priorities(indicies, td_errors)
         return float(loss.item())

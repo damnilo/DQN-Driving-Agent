@@ -13,12 +13,13 @@ from utils.logger import Logger
 from configs.env_config import *
 
 CURVE_MAPS = ["SCSC", "CSCS", "CCCC", 4]
-EVAL_FREQ = 200
+STRAIGHT_RETENTION_THRESHOLD = 0.70
+EVAL_FREQ = 120
 MAX_EPISODES = 4000
 
 CURRICULUM_STAGES = [
-    (0, ["SCSC"], [1.00], 0.0),
-    (400, ["SCSC", "CSCS"], [0.55, 0.45], 0.0),
+    (0, ["CSCS"], [1.00], 0.0),
+    (400, ["SCSC", "CSCS"], [0.45, 0.55], 0.0),
     (900, ["SCSC", "CSCS", "CCCC"], [0.35, 0.35, 0.30], 0.1),
     (1600, ["SCSC", "CSCS", "CCCC", 4], [0.25, 0.25, 0.25, 0.25], 0.2)
 ]
@@ -54,7 +55,8 @@ def main():
     epsilon_scheduler = EpsilonScheduler(**CURVE_EPSILON_CONFIG)
 
     agent = DQNAgent(
-        input_size=obs_size, num_actions=ActionMapper_num_actions(), 
+        input_size=obs_size,
+        num_actions=ActionMapper_num_actions(),
         epsilon_scheduler=epsilon_scheduler
     )
 
@@ -64,10 +66,11 @@ def main():
 
     optimizer = torch.optim.Adam(agent.online_net.parameters(), lr = CURVE_TRAIN_CONFIG["lr"])
 
-    if not os.path.exists(BC_CHECKPOINT_CURVE):
-        raise FileNotFoundError("Nema bc_pretrain_curve.pt. Prvo pokreni train_straight.py")
+    straight_checkpoint = BC_CHECKPOINT_CURVE
+    if not os.path.exists(straight_checkpoint):
+        raise FileNotFoundError("Nema bc_pretrain_curve.pt. Prvo pokreni train_curve.py")
 
-    ckpt = torch.load(BC_CHECKPOINT_CURVE, map_location="cpu", weights_only=True)
+    ckpt = torch.load(straight_checkpoint, map_location="cpu", weights_only=True)
     agent.online_net.load_state_dict(ckpt)
     agent.target_net.load_state_dict(ckpt)
 
@@ -90,7 +93,7 @@ def main():
     initial_config["map"] = initial_map
     initial_config["traffic_density"] = initial_density
     initial_config["horizon"] = _horizon_for_map(initial_map)
-    initial_config["num_scenarios"] = 50
+    initial_config["num_scenarios"] = 20
 
     train_env=MetaDriveEnvWrapper(initial_config)
     train_env.reward_function.use_soft_out_of_road = True
@@ -116,7 +119,7 @@ def main():
                 curve_config["map"] = target_map
                 curve_config["traffic_density"] = density
                 curve_config["horizon"] = _horizon_for_map(target_map)
-                curve_config["num_scenarios"] = 50
+                curve_config["num_scenarios"] = 20
                 trainer.env = MetaDriveEnvWrapper(curve_config)
                 trainer.env.reward_function.use_soft_out_of_road = True
                 trainer._last_map = target_map
@@ -137,7 +140,7 @@ def main():
                 curve_score = sum(results.get(m, {}).get("success_rate", 0.0) for m in CURVE_MAPS) / len(CURVE_MAPS)
 
                 print(
-                    f"[Eval] Curve composite = {curve_score:.3f} | "
+                    f"Curve composite = {curve_score:.3f} | "
                     + " | ".join(f"{m}={results.get(m, {}).get('success_rate', 0.0):.2f}" for m in CURVE_MAPS)
                 )
 
@@ -154,7 +157,7 @@ def main():
                 curve_config["map"] = next_map
                 curve_config["traffic_density"] = next_density
                 curve_config["horizon"] = _horizon_for_map(next_map)
-                curve_config["num_scenarios"] = 50
+                curve_config["num_scenarios"] = 20
                 trainer.env = MetaDriveEnvWrapper(curve_config)
                 trainer.env.reward_function.use_soft_out_of_road = True
                 trainer._last_map = next_map

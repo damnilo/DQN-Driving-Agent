@@ -1,16 +1,15 @@
 import numpy as np
+from enviornments.action_mapper import ActionMapper
 
-STEERING_WEIGHT = 3.0
+action_mapper = ActionMapper()
 
-def continuous_to_discrete(steering, throttle, action_map):
+def _discretize_steering(steering):
+    return int(np.argmin(np.abs(action_mapper.get_steering_actions() - steering)))
 
-    best_action, best_distance = 0, float("inf")
+def _discretize_throttle(throttle):
+    return int(np.argmin(np.abs(action_mapper.get_throttle_actions() - throttle)))
 
-    for idx, (s, t) in action_map.items():
-        ds, dt = steering - s, throttle - t
-        distance = (ds * STEERING_WEIGHT) ** 2 + dt ** 2
-
-        if distance < best_distance:
-            best_distance, best_action = distance, idx
-
-    return best_action
+def discretize_action(steering, throttle):
+    discrete_steering = _discretize_steering(steering)
+    discrete_throttle = _discretize_throttle(throttle)
+    return discrete_steering * len(action_mapper.throttle_actions) + discrete_throttle

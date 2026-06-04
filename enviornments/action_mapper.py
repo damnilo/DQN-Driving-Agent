@@ -1,47 +1,40 @@
+import numpy as np
+
 class ActionMapper:
     def __init__(self):
-        self.action = {
-            # Pravo — ekspert ovo koristi 91% vremena
-            0:  [ 0.00,  0.60],
-            1:  [ 0.00,  0.35],
-            2:  [ 0.00, -0.30],  # kočenje
+        # Use ordered sequences (lists) so indexing is stable and deterministic
+        self.steering_actions = [
+            -0.50, -0.36, -0.26, -0.18, -0.12, -0.06, 0.0,
+            0.06, 0.12, 0.18, 0.26, 0.36, 0.50
+        ]
 
-            # Fino lijevo — gdje ekspert stvarno skreće
-            3:  [-0.05,  0.55],
-            4:  [-0.10,  0.50],
-            5:  [-0.15,  0.45],
-            6:  [-0.20,  0.40],
-            7:  [-0.25,  0.35],
-            8:  [-0.30,  0.28],
-            9:  [-0.35, 0.25],
-            10: [-0.40, 0.22],
-            11: [-0.45, 0.18],
-            12: [-0.50, 0.15],
-            13: [-0.55, 0.12],
+        self.throttle_actions = [
+            -0.30, -0.15, 0.10, 0.35, 0.50, 0.65
+        ]
 
-            # Fino desno — simetrično
-            14: [ 0.05,  0.55],
-            15: [ 0.10,  0.50],
-            16: [ 0.15,  0.45],
-            17: [ 0.20,  0.40],
-            18: [ 0.25,  0.35],
-            19: [ 0.30,  0.28],
-            20: [ 0.35,  0.25],
-            21: [ 0.40,  0.22],
-            22: [ 0.45,  0.18],
-            23: [ 0.50,  0.15],
-            24: [ 0.55,  0.12],
-            
+        self.action_space = [
+            (steer_idx, throttle_idx)
+            for steer_idx in range(len(self.steering_actions))
+            for throttle_idx in range(len(self.throttle_actions))
+        ]
 
-            25: [ -0.30, -0.15],
-            26: [ -0.10, -0.25],
-            27: [ 0.30, -0.15],
-            28: [ 0.10, -0.25],
+    def map(self, action):
+        if isinstance(action, (int, np.integer)):
+            return self.action_space[int(action)]
 
-        }
+        if isinstance(action, (list, tuple, np.ndarray)):
+            if len(action) != 2:
+                raise ValueError("Expected discrete action pair [steer_idx, throttle_idx]")
+            action_space_idx = int(action[0]) * len(self.throttle_actions) + int(action[1])
+            return self.action_space[action_space_idx]
 
-    def map(self, discrete_action):
-        return self.action[int(discrete_action)]
-
+        raise TypeError("Action must be an int index or a 2-element discrete action pair")
+    
     def num_actions(self):
-        return len(self.action)
+        return len(self.action_space)
+    
+    def get_steering_actions(self):
+        return np.array(self.steering_actions, dtype=np.float32)
+    
+    def get_throttle_actions(self):
+        return np.array(self.throttle_actions, dtype=np.float32)

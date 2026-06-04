@@ -10,13 +10,16 @@ class FrameStack:
     def reset(self, initial_observation):
         self.frames.clear()
 
-        for _ in range(self.stack_size):
-            self.frames.append(initial_observation)
+        zero_frame = np.zeros_like(initial_observation, dtype=np.float32)
+        for _ in range(self.stack_size - 1):
+            self.frames.append(zero_frame)
+        
+        self.frames.append(initial_observation.astype(np.float32))
 
         return self._get_stacked_state()
     
     def step(self, observation):
-        self.frames.append(observation)
+        self.frames.append(observation.astype(np.float32))
 
         return self._get_stacked_state()
     

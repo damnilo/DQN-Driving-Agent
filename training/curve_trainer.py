@@ -2,8 +2,8 @@ import numpy as np
 from training.trainer import Trainer
 
 class CurveTrainer(Trainer):
-    MIN_STEPS_BEFORE_EXIT = 150
-    EARLY_EXIT_THRESHOLD = -200
+    MIN_STEPS_BEFORE_EXIT = 50
+    EARLY_EXIT_THRESHOLD = -300
 
     def __init__(self, env, agent, optimizer, replay_buffer, config, logger):
         super().__init__(env=env, agent=agent, optimizer=optimizer, replay_buffer=replay_buffer, config=config, logger=logger, scheduler=None)

@@ -24,7 +24,7 @@ class Evaluator:
         config = dict(ENV_CONFIG)
         config["map"] = map_name
         config["horizon"] = self._horizon_for_map(map_name)
-        config["num_scenarios"] = 50
+        config["num_scenarios"] = 20
         config["start_seed"] = 0
         config["traffic_density"] = 0.0
         env = MetaDriveEnvWrapper(config)
