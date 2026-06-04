@@ -113,7 +113,7 @@ class Trainer:
                 training=True
             )
 
-            next_state, reward, terminated, truncated, _ = self.env.step(action)
+            next_state, reward, terminated, truncated, info = self.env.step(action)
             next_state = self.frame_stack.step(next_state)
 
             done = terminated or truncated
