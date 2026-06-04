@@ -9,7 +9,7 @@ from configs.env_config import ENV_CONFIG, EXPERT_RATIO, EXPERT_RATIO_CURVE
 class Trainer:
 
     MIN_STEPS_BEFORE_EXIT = 0
-    EARLY_EXIT_THRESHOLD = -300
+    EARLY_EXIT_THRESHOLD = -400
 
     def __init__(self, env, agent, replay_buffer, optimizer, config, logger, scheduler):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -59,9 +59,6 @@ class Trainer:
 
         if self._last_map == target_map:
             return False
-
-        old_family = self._map_family(self._last_map) if self._last_map is not None else None
-        new_family = self._map_family(target_map)
 
         current_map = self.env.env.config.get("map") if self._last_map is not None else None
         print(f"[Curriculum] Ep {episode}: {current_map} -> {target_map}")

@@ -24,7 +24,6 @@ class ObservationBuilder:
 
         sensor_extras = self._sensor_extras(env)
         nav_extras = self._nav_extras(info)
-        angles_extras = self._future_waypoints(env)
 
         # Prev action may be a scalar index or a pair [steering_idx, throttle_idx].
         if isinstance(prev_action_idx, (list, tuple, np.ndarray)):
@@ -45,9 +44,8 @@ class ObservationBuilder:
         sensor_extras = np.atleast_1d(sensor_extras)
         nav_extras = np.atleast_1d(nav_extras)
         prev_action_feat = np.atleast_1d(prev_action_feat)
-        angles_extras = np.atleast_1d(angles_extras)
 
-        return np.concatenate([ego, nav, lidar, sensor_extras, nav_extras, prev_action_feat, angles_extras]).astype(np.float32)
+        return np.concatenate([ego, nav, lidar, sensor_extras, nav_extras, prev_action_feat]).astype(np.float32)
     
     def _nav_extras(self, info):
         nav_cmd = float(info.get("navigation_command_float", 0.0))
@@ -116,37 +114,3 @@ class ObservationBuilder:
             return np.array([], dtype=np.float32)
         
         return np.concatenate(parts)
-    
-    def _future_waypoints(self, env):
-
-        future_angles = []
-
-        try:
-            checkpoints = env.agent.navigation.checkpoints
-
-            ego_pos = env.agent.position
-            ego_heading = env.agent.heading_theta
-
-            for checkpoint in checkpoints[:5]:
-                dx = checkpoint[0] - ego_pos[0]
-                dy = checkpoint[1] - ego_pos[1]
-
-                waypoint_heading = np.arctan2(dy, dx)
-
-                angle = waypoint_heading - ego_heading
-                angle = np.arctan2(np.sin(angle), np.cos(angle))
-
-                angle = np.clip(angle / np.pi, -1.0, 1.0)
-
-                future_angles.append(angle)
-        except Exception:
-            future_angles = []
-
-        while len(future_angles) < 5:
-            future_angles.append(0.0)
-
-        curvature = abs(future_angles[-1] - future_angles[0])
-
-        future_angles.append(curvature)
-
-        return np.asarray(future_angles, dtype=np.float32)

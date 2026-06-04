@@ -11,11 +11,11 @@ EPISODES_PER_MAP = 3
 
 def get_checkpoint_for_map(map_name):
     if map_name == "SSSS":
-        return "checkpoints/best_straight.pt"
+        return "checkpoints/straight_final.pt"
     else:
-        if os.path.exists("checkpoints/best_curve.pt"):
-            return "checkpoints/best_curve.pt"
-        return "checkpoints/best_straight.pt"
+        if os.path.exists("checkpoints/curve_final.pt"):
+            return "checkpoints/curve_final.pt"
+        return "checkpoints/straight_final.pt"
 
 def run_episode(env, agent, render=True):
     frame_stack = FrameStack(stack_size=4)
@@ -42,6 +42,7 @@ def run_episode(env, agent, render=True):
         done = term or trunc
         total_reward += reward
         step += 1
+        print(info.get("velocity", 0.0))
 
         heading_err = abs(info.get("heading_error", 0.0))
         max_heading_err = max(heading_err, max_heading_err)
