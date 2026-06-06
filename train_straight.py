@@ -13,7 +13,7 @@ from utils.logger import Logger
 from configs.env_config import *
 
 TARGET_SUCCESS = 0.90
-EVAL_FREQ = 80
+EVAL_FREQ = 40
 MAX_EPISODES = 2000
 
 def main():
@@ -62,12 +62,11 @@ def main():
     trainer._last_map = "SSSS"
     straight_config = dict(ENV_CONFIG)
     straight_config["map"] = "SSSS"
-    straight_config["horizon"] = 800
+    straight_config["horizon"] = 500
     straight_config["num_scenarios"] = 20
     straight_config["traffic_density"] = 0.0
     trainer.env.close()
     trainer.env = MetaDriveEnvWrapper(straight_config)
-    trainer.env.reward_function.use_soft_out_of_road = False
     replay_buffer.expert_ratio = EXPERT_RATIO
 
     best_success = 0.0
@@ -90,7 +89,6 @@ def main():
                 print(f"[EVAL] SSSS Success = {success:.2f}")
 
                 trainer.env = MetaDriveEnvWrapper(straight_config)
-                trainer.env.reward_function.use_soft_out_of_road = False
                 trainer._last_map = "SSSS"
                 evaluator.env = trainer.env
 

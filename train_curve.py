@@ -14,7 +14,7 @@ from configs.env_config import *
 
 CURVE_MAPS = ["SCSC", "CSCS", "CCCC", 4]
 STRAIGHT_RETENTION_THRESHOLD = 0.70
-EVAL_FREQ = 120
+EVAL_FREQ = 40
 MAX_EPISODES = 4000
 
 CURRICULUM_STAGES = [
@@ -66,15 +66,15 @@ def main():
 
     optimizer = torch.optim.Adam(agent.online_net.parameters(), lr = CURVE_TRAIN_CONFIG["lr"])
 
-    straight_checkpoint = BC_CHECKPOINT_CURVE
+    straight_checkpoint = "checkpoints/best_straight.pt"
     if not os.path.exists(straight_checkpoint):
-        raise FileNotFoundError("Nema bc_pretrain_curve.pt. Prvo pokreni train_curve.py")
+        raise FileNotFoundError("Nema best_straight.pt. Prvo pokreni train_curve.py")
 
     ckpt = torch.load(straight_checkpoint, map_location="cpu", weights_only=True)
-    agent.online_net.load_state_dict(ckpt)
-    agent.target_net.load_state_dict(ckpt)
+    agent.online_net.load_state_dict(ckpt["online_net"])
+    agent.target_net.load_state_dict(ckpt["target_net"])
 
-    print("[Phase 2] Ucitan bc_pretrain_curve.pt kao polazna tacka")
+    print("[Phase 2] Ucitan best_straight.pt kao polazna tacka")
     
     checkpoint_manager = CheckpointManager()
 
@@ -96,7 +96,6 @@ def main():
     initial_config["num_scenarios"] = 20
 
     train_env=MetaDriveEnvWrapper(initial_config)
-    train_env.reward_function.use_soft_out_of_road = True
 
     trainer = CurveTrainer(
         env=train_env, agent=agent, replay_buffer=replay_buffer, optimizer=optimizer, config=CURVE_TRAIN_CONFIG, logger=logger
@@ -121,7 +120,6 @@ def main():
                 curve_config["horizon"] = _horizon_for_map(target_map)
                 curve_config["num_scenarios"] = 20
                 trainer.env = MetaDriveEnvWrapper(curve_config)
-                trainer.env.reward_function.use_soft_out_of_road = True
                 trainer._last_map = target_map
                 evaluator.env = trainer.env
                 print(f"[Curriculum] Ep {episode}: -> {target_map}")
@@ -159,7 +157,6 @@ def main():
                 curve_config["horizon"] = _horizon_for_map(next_map)
                 curve_config["num_scenarios"] = 20
                 trainer.env = MetaDriveEnvWrapper(curve_config)
-                trainer.env.reward_function.use_soft_out_of_road = True
                 trainer._last_map = next_map
                 evaluator.env = trainer.env
 

@@ -6,44 +6,53 @@ class RewardFunction:
 
     def __init__(self):
         self.prev_steering = 0.0
-        self.prev_throttle = 0.0
-        self.low_speed_steps = 0
-        self.episode_steps = 0
-        self.use_soft_out_of_road = False
+        self.prev_longitudinal = None
 
-    def compute(self, info, env_reward=0.0):
-        self.episode_steps += 1
+    def compute(self, info):
         if info.get("crash", False):
-            return -300.0 if self.use_soft_out_of_road else -300.0
+            return -100.0
 
         if info.get("out_of_road", False):
-            return -80.0 if self.use_soft_out_of_road else -300.0
+            return -100.0
         
         if info.get("arrive_dest", False):
-            return 300.0
+            return 500.0
         
         if info.get("max_step", False):
-            return -150.0
+            return -50.0
+        
+        if info.get("stuck", False):
+            return -40.0
         
         steering = float(info.get("steering", 0.0))
-
+        long = float(info.get("longitudinal", 0.0))
         speed_val = float(info.get("velocity", 0.0))
         heading_err = abs(float(info.get("heading_error", 0.0)))
         lateral = abs(float(info.get("lateral_offset", 0.0)))
 
         reward = 0.1
 
-        reward += (speed_val * np.cos(heading_err)) / 40.0
-        reward += (1.0 - lateral) * 0.2
-        reward -= 0.01 * abs(steering - self.prev_steering)
+        if self.prev_longitudinal is None:
+            progress_delta = 0.0
+        else:
+            progress_delta = long - self.prev_longitudinal
+
+        reward += progress_delta * 2.5
+        reward += np.cos(heading_err) * 0.6
+        reward -= abs(lateral) * 1.2
+        reward -= 0.25 * abs(steering - self.prev_steering)
+        reward -= 0.03 * abs(steering)
+        reward -= abs(heading_err) * speed_val * 0.04
+
+        if abs(heading_err) > 0.5:
+            reward -= 2.0
 
         self.prev_steering = steering
+        self.prev_longitudinal = long
 
         return reward
 
         
     def reset(self):
         self.prev_steering = 0.0
-        self.prev_throttle = 0.0
-        self.low_speed_steps = 0
-        self.episode_steps = 0
+        self.prev_longitudinal = None

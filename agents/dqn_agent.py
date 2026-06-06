@@ -39,10 +39,7 @@ class DQNAgent:
         with torch.no_grad():
             q_values = self.online_net(state_t)
 
-            base_action = torch.argmax(q_values, dim=1).item()
-            
-            noise = random.choice([-2, -1, 1, 2])
-            action = np.clip(base_action + noise, 0, self.num_actions - 1)
+            action = torch.argmax(q_values, dim=1).item()
 
         return action
     

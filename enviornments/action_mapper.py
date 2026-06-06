@@ -4,8 +4,8 @@ class ActionMapper:
     def __init__(self):
         # Use ordered sequences (lists) so indexing is stable and deterministic
         self.steering_actions = [
-            -0.50, -0.36, -0.26, -0.18, -0.12, -0.06, 0.0,
-            0.06, 0.12, 0.18, 0.26, 0.36, 0.50
+            -0.30, -0.22, -0.16, -0.10, -0.05, 0.0,
+            0.05, 0.10, 0.16, 0.22, 0.30
         ]
 
         self.throttle_actions = [
@@ -13,7 +13,7 @@ class ActionMapper:
         ]
 
         self.action_space = [
-            (steer_idx, throttle_idx)
+            (self.steering_actions[steer_idx], self.throttle_actions[throttle_idx])
             for steer_idx in range(len(self.steering_actions))
             for throttle_idx in range(len(self.throttle_actions))
         ]

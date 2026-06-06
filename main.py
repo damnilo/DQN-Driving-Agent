@@ -42,7 +42,6 @@ def run_episode(env, agent, render=True):
         done = term or trunc
         total_reward += reward
         step += 1
-        print(info.get("velocity", 0.0))
 
         heading_err = abs(info.get("heading_error", 0.0))
         max_heading_err = max(heading_err, max_heading_err)

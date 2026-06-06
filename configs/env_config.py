@@ -28,9 +28,9 @@ TRAIN_CONFIG = {
 CURVE_TRAIN_CONFIG = {
     "batch_size": 32,
     "gamma": 0.97,
-    "lr": 5e-6,
+    "lr": 5e-5,
     "replay_capacity": 150_000,
-    "min_replay_size": 1_000,
+    "min_replay_size": 10_000,
     "target_update_freq": None
 }
 
@@ -42,9 +42,9 @@ EXPERT_DATASET = "dataset/expert_dataset.json"
 EVAL_EPISODES_PER_MAP = 10
 
 CURVE_EPSILON_CONFIG = {
-    "start": 0.50,
-    "end": 0.05,
-    "decay": 400_000,
+    "start": 0.80,
+    "end": 0.03,
+    "decay": 800_000,
     "warmup_steps": 1_000
 }
 

@@ -9,7 +9,7 @@ from configs.env_config import ENV_CONFIG, EXPERT_RATIO, EXPERT_RATIO_CURVE
 class Trainer:
 
     MIN_STEPS_BEFORE_EXIT = 0
-    EARLY_EXIT_THRESHOLD = -400
+    EARLY_EXIT_THRESHOLD = -600
 
     def __init__(self, env, agent, replay_buffer, optimizer, config, logger, scheduler):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -27,65 +27,6 @@ class Trainer:
         self.agent.online_net.to(self.device)
         self.agent.target_net.to(self.device)
 
-    def _pick_map_for_episode(self, episode: int):
-        if episode < 200:
-            return "SSSS", 0.0
-        if episode < 500:
-            return random.choices(["SSSS", "SCSC", "CSCS"], weights=[0.50, 0.25, 0.25])[0], 0.05
-        if episode < 900:
-            return random.choices(["SSSS", "SCSC", "CSCS"], weights=[0.25, 0.40, 0.35])[0], 0.1
-        if episode < 1400:
-            return random.choices(["SSSS", "SCSC", "CSCS", "CCCC"], weights=[0.15, 0.25, 0.25, 0.35])[0], 0.15
-        if episode < 2000:
-            return random.choices(["SSSS", "CSCS", "CCCC", 4], weights=[0.10, 0.25, 0.30, 0.35])[0], 0.2
-        return random.choices(["SSSS", "SCSC", "CSCS", "CCCC", 4], weights=[0.10, 0.15, 0.15, 0.20, 0.40])[0], 0.25 
-
-    def _horizon_for_map(self, target_map) -> int:
-        if target_map == "SSSS":
-            return 800
-        if target_map in ("SCSC", "CSCS"):
-            return 1000
-        if target_map == "CCCC":
-            return 1200
-        return 1600
-
-    @staticmethod
-    def _map_family(target_map) -> str:
-        return "straight" if target_map == "SSSS" else "curve"
-
-    def set_map(self, episode):
-        target_map, density = self._pick_map_for_episode(episode)
-        horizon = self._horizon_for_map(target_map)
-
-        if self._last_map == target_map:
-            return False
-
-        current_map = self.env.env.config.get("map") if self._last_map is not None else None
-        print(f"[Curriculum] Ep {episode}: {current_map} -> {target_map}")
-
-        self.env.close()
-
-        current_config = dict(ENV_CONFIG)
-        current_config["map"] = target_map
-        current_config["traffic_density"] = density
-        current_config["horizon"] = horizon
-        current_config["start_seed"] = 0
-        current_config["num_scenarios"] = 20
-
-        from enviornments.metadrive_env import MetaDriveEnvWrapper
-
-        self.env = MetaDriveEnvWrapper(current_config)
-        self.frame_stack = FrameStack(stack_size=4)
-        self._last_map = target_map
-
-        if target_map == "SSSS":
-            self.replay_buffer.expert_ratio = EXPERT_RATIO
-            self.env.reward_function.use_soft_out_of_road = False
-        else:
-            self.replay_buffer.expert_ratio = EXPERT_RATIO_CURVE
-            self.env.reward_function.use_soft_out_of_road = True
-
-        return True
 
     def train(self, num_episodes):
 

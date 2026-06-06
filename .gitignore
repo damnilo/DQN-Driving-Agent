@@ -12,8 +12,7 @@ Documents/
 run_pipeline.ps1
 salvage_dataset.py
 sanity_check.py
-train.zip
+train_curve.zip
 run_logs/
 dataset/
 xd.py
-collect_idm.zip

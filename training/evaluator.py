@@ -28,10 +28,6 @@ class Evaluator:
         config["start_seed"] = 0
         config["traffic_density"] = 0.0
         env = MetaDriveEnvWrapper(config)
-        if map_name == "SSSS":
-            env.reward_function.use_soft_out_of_road = False
-        else:
-            env.reward_function.use_soft_out_of_road = True
         return env
 
     def evaluate_on_map(self, map_name, num_episodes=10):

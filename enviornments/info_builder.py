@@ -48,6 +48,10 @@ class InfoBuilder:
         out["step_reward"] = float(info.get("step_reward", 0.0))
         out["episode_reward"] = float(info.get("episode_reward", 0.0))
 
+        lane = agent.lane
+        long, _ = lane.local_coordinates(agent.position)
+        out["longitudinal"] = long
+
         return out
 
     def _lateral_offset(self, agent, nav) -> float:
