@@ -3,7 +3,7 @@ import os
 import torch
 import torch.nn as nn
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 
 from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
@@ -146,13 +146,36 @@ def make_loader(dataset_path, map_family=None, batch_size=256, val_split=0.15):
         train_size = len(ds) - val_size
         train_ds, val_ds = torch.utils.data.random_split(ds, [train_size, val_size])
 
-        train_loader = DataLoader(
-            train_ds, 
-            batch_size=batch_size, 
-            shuffle=True, 
-            num_workers=0,
-            pin_memory=torch.cuda.is_available()
-        )
+        # Build a WeightedRandomSampler to balance action classes with sqrt dampening
+        try:
+            # train_ds is a Subset; get original dataset and indices
+            full_actions = ds.actions.numpy()
+            train_indices = train_ds.indices
+            train_actions = full_actions[train_indices]
+
+            class_counts = np.bincount(train_actions, minlength=int(full_actions.max() + 1))
+            freqs = class_counts / class_counts.sum()
+            weights_per_class = 1.0 / (np.sqrt(freqs + 1e-8))
+            sample_weights = weights_per_class[train_actions]
+
+            sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
+
+            train_loader = DataLoader(
+                train_ds,
+                batch_size=batch_size,
+                sampler=sampler,
+                num_workers=0,
+                pin_memory=torch.cuda.is_available()
+            )
+        except Exception:
+            # fallback to simple shuffle if something goes wrong
+            train_loader = DataLoader(
+                train_ds, 
+                batch_size=batch_size, 
+                shuffle=True, 
+                num_workers=0,
+                pin_memory=torch.cuda.is_available()
+            )
 
         val_loader = DataLoader(
             val_ds, 

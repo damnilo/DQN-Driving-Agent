@@ -35,16 +35,16 @@ CURVE_TRAIN_CONFIG = {
 }
 
 EXPERT_RATIO = 0.3
-EXPERT_RATIO_CURVE = 0.35
+EXPERT_RATIO_CURVE = 0.15
 PRETRAIN_DQN_STEPS = 0
 EXPERT_DATASET = "dataset/expert_dataset.json"
 
 EVAL_EPISODES_PER_MAP = 10
 
 CURVE_EPSILON_CONFIG = {
-    "start": 0.80,
+    "start": 0.45,
     "end": 0.03,
-    "decay": 800_000,
+    "decay": 450_000,
     "warmup_steps": 1_000
 }
 

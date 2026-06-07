@@ -24,6 +24,7 @@ class ObservationBuilder:
 
         sensor_extras = self._sensor_extras(env)
         nav_extras = self._nav_extras(info)
+        future_hint = self._nav_extras(info)[:2]
 
         # Prev action may be a scalar index or a pair [steering_idx, throttle_idx].
         if isinstance(prev_action_idx, (list, tuple, np.ndarray)):
@@ -44,8 +45,9 @@ class ObservationBuilder:
         sensor_extras = np.atleast_1d(sensor_extras)
         nav_extras = np.atleast_1d(nav_extras)
         prev_action_feat = np.atleast_1d(prev_action_feat)
+        future_hint = np.atleast_1d(future_hint)
 
-        return np.concatenate([ego, nav, lidar, sensor_extras, nav_extras, prev_action_feat]).astype(np.float32)
+        return np.concatenate([ego, nav, lidar, sensor_extras, nav_extras, prev_action_feat, future_hint]).astype(np.float32)
     
     def _nav_extras(self, info):
         nav_cmd = float(info.get("navigation_command_float", 0.0))

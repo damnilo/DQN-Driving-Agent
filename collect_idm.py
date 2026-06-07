@@ -25,17 +25,18 @@ def reset_with_timeout(env):
         return None
     
 def map_for_episode(episode, num_episodes):
+    # target distribution: ~22% straight (SSSS), rest mixed
     ratio = episode / max(1, num_episodes)
 
-    if ratio < 0.05:
+    if ratio < 0.22:
         return "SSSS"
-    elif ratio < 0.40:
+    elif ratio < 0.48:
         return "SCSC"
-    elif ratio < 0.65:
+    elif ratio < 0.74:
         return "CSCS"
-    elif ratio < 0.82:
+    elif ratio < 0.92:
         return "CCCC"
-    return 4
+    return "SCSC"
 
 def round_obs(arr, decimals=5):
     return np.round(arr, decimals).tolist()
@@ -106,7 +107,7 @@ def main():
             action = env.engine.get_policy(env.agent.id).act()
             norm_steering, norm_throttle = normalize_action(action[0], action[1])
 
-            next_obs, reward, terminated, truncated, next_info = env.step_continuous(action)
+            next_obs, reward, terminated, truncated, next_info = env.step(action)
             next_state = frame_stack.step(next_obs)
             done = terminated or truncated
 

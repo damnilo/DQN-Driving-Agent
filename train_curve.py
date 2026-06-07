@@ -12,38 +12,53 @@ from training.checkpoint_manager import CheckpointManager
 from utils.logger import Logger
 from configs.env_config import *
 
-CURVE_MAPS = ["SCSC", "CSCS", "CCCC", 4]
-STRAIGHT_RETENTION_THRESHOLD = 0.70
+CURVE_MAPS = ["SSSS", "SCSC", "CSCS", "CCCC"]
 EVAL_FREQ = 40
 MAX_EPISODES = 4000
 
 CURRICULUM_STAGES = [
-    (0, ["CSCS"], [1.00], 0.0),
-    (400, ["SCSC", "CSCS"], [0.45, 0.55], 0.0),
-    (900, ["SCSC", "CSCS", "CCCC"], [0.35, 0.35, 0.30], 0.1),
-    (1600, ["SCSC", "CSCS", "CCCC", 4], [0.25, 0.25, 0.25, 0.25], 0.2)
+    (0, ["SSSS", "CSCS"], [0.07, 0.93], 0.0),
+    (400, ["SSSS", "SCSC", "CSCS"], [0.07, 0.42, 0.51], 0.0),
+    (900, ["SSSS", "SCSC", "CSCS", "CCCC"], [0.07, 0.33, 0.30, 0.30], 0.1),
+    (1600, ["SSSS", "SCSC", "CSCS", "CCCC"], [0.07, 0.24, 0.24, 0.45], 0.2)
 ]
+
+# Straight retention parameters
+STRAIGHT_RETENTION_THRESHOLD = 0.85
+STRAIGHT_BOOST_AMOUNT = 0.12
+STRAIGHT_BOOST_DURATION = 500
 
 def ActionMapper_num_actions():
     from enviornments.action_mapper import ActionMapper
     return ActionMapper().num_actions()
 
-def pick_curve_map(episode):
+def pick_curve_map(episode, straight_boost=0.0):
     stage = CURRICULUM_STAGES[0]
     for s in CURRICULUM_STAGES:
         if episode >= s[0]:
             stage = s
     _, maps, weights, density = stage
+
+    # if we have a temporary straight boost, add it to SSSS weight and renormalize
+    weights = list(weights)
+    if straight_boost > 0.0 and "SSSS" in maps:
+        idx = maps.index("SSSS")
+        weights[idx] = max(0.0, weights[idx] + straight_boost)
+        # renormalize
+        total = sum(weights)
+        if total > 0:
+            weights = [w / total for w in weights]
+
     chosen = random.choices(maps, weights=weights)[0]
     return chosen, density
 
 def _horizon_for_map(map):
     if map in ["SCSC", "CSCS"]:
-        return 1500
+        return 1000
     if map == "CCCC":
-        return 1800
+        return 1400
     
-    return 2000
+    return 800
 
 def main():
     env = MetaDriveEnvWrapper(dict(ENV_CONFIG))
@@ -68,7 +83,7 @@ def main():
 
     straight_checkpoint = "checkpoints/best_straight.pt"
     if not os.path.exists(straight_checkpoint):
-        raise FileNotFoundError("Nema best_straight.pt. Prvo pokreni train_curve.py")
+        raise FileNotFoundError("Nema best_straight.pt. Prvo pokreni train_straight.py")
 
     ckpt = torch.load(straight_checkpoint, map_location="cpu", weights_only=True)
     agent.online_net.load_state_dict(ckpt["online_net"])
@@ -88,7 +103,11 @@ def main():
 
     logger = Logger(log_dir="logs")
 
-    initial_map, initial_density = pick_curve_map(0)
+    # dynamic straight boost state
+    straight_boost_until = 0
+    straight_boost = 0.0
+
+    initial_map, initial_density = pick_curve_map(0, straight_boost)
     initial_config = dict(ENV_CONFIG)
     initial_config["map"] = initial_map
     initial_config["traffic_density"] = initial_density
@@ -110,7 +129,13 @@ def main():
     try:
 
         for episode in range(MAX_EPISODES):
-            target_map, density = pick_curve_map(episode)
+            # apply temporary straight boost if active
+            if episode < straight_boost_until:
+                cur_boost = straight_boost
+            else:
+                cur_boost = 0.0
+
+            target_map, density = pick_curve_map(episode, cur_boost)
 
             if trainer._last_map != target_map:
                 trainer.env.close()
@@ -150,7 +175,15 @@ def main():
                     )
                     print(f"[Checkpoint] Novi best_curve.pt: {curve_score:.3f}")
 
-                next_map, next_density = pick_curve_map(episode+1)
+                # Straight retention check: evaluate SSSS performance and boost if needed
+                ssss_res = results.get("SSSS", {})
+                ssss_rate = ssss_res.get("success_rate", 0.0)
+                if ssss_rate < STRAIGHT_RETENTION_THRESHOLD:
+                    straight_boost = STRAIGHT_BOOST_AMOUNT
+                    straight_boost_until = episode + STRAIGHT_BOOST_DURATION
+                    print(f"[StraightRetention] SSSS perf {ssss_rate:.2f} below threshold; boosting for {STRAIGHT_BOOST_DURATION} eps")
+
+                next_map, next_density = pick_curve_map(episode+1, cur_boost)
                 curve_config = dict(ENV_CONFIG)
                 curve_config["map"] = next_map
                 curve_config["traffic_density"] = next_density

@@ -122,8 +122,7 @@ class Trainer:
             max_target_q = target_q.gather(1, next_action).squeeze(1)
 
             targets = rewards_t + (1.0 - dones_t) * self.config["gamma"] * max_target_q
-            targets = torch.clamp(targets, -100.0, 100.0)
-
+            
         action_q = self.agent.online_net(states_t)
 
         if torch.isnan(action_q).any():

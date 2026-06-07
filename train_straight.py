@@ -47,7 +47,8 @@ def main():
         capacity = TRAIN_CONFIG["replay_capacity"],
         expert_dataset_path = EXPERT_DATASET,
         num_actions = num_actions,
-        expert_ratio = EXPERT_RATIO
+        expert_ratio = EXPERT_RATIO,
+        map_filter={"SSSS"}
     )
 
     logger = Logger(log_dir="logs")

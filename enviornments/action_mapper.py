@@ -2,15 +2,8 @@ import numpy as np
 
 class ActionMapper:
     def __init__(self):
-        # Use ordered sequences (lists) so indexing is stable and deterministic
-        self.steering_actions = [
-            -0.30, -0.22, -0.16, -0.10, -0.05, 0.0,
-            0.05, 0.10, 0.16, 0.22, 0.30
-        ]
-
-        self.throttle_actions = [
-            -0.30, -0.15, 0.10, 0.35, 0.50, 0.65
-        ]
+        self.steering_actions = [-0.30, -0.18, -0.09, 0.0, 0.09, 0.18, 0.30]
+        self.throttle_actions = [-0.30, -0.05, 0.25, 0.60]
 
         self.action_space = [
             (self.steering_actions[steer_idx], self.throttle_actions[throttle_idx])

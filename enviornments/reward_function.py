@@ -7,6 +7,7 @@ class RewardFunction:
     def __init__(self):
         self.prev_steering = 0.0
         self.prev_longitudinal = None
+        self.checkpoints_passed = set()
 
     def compute(self, info):
         if info.get("crash", False):
@@ -16,7 +17,7 @@ class RewardFunction:
             return -100.0
         
         if info.get("arrive_dest", False):
-            return 500.0
+            return 1000.0
         
         if info.get("max_step", False):
             return -50.0
@@ -38,11 +39,15 @@ class RewardFunction:
             progress_delta = long - self.prev_longitudinal
 
         reward += progress_delta * 2.5
+
         reward += np.cos(heading_err) * 0.6
-        reward -= abs(lateral) * 1.2
+        reward -= abs(lateral) * 0.5
         reward -= 0.25 * abs(steering - self.prev_steering)
         reward -= 0.03 * abs(steering)
         reward -= abs(heading_err) * speed_val * 0.04
+
+        if abs(heading_err) > 0.15 and speed_val < 25:
+            reward += 0.4
 
         if abs(heading_err) > 0.5:
             reward -= 2.0
@@ -56,3 +61,4 @@ class RewardFunction:
     def reset(self):
         self.prev_steering = 0.0
         self.prev_longitudinal = None
+        self.checkpoints_passed = set()

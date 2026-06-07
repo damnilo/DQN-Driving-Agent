@@ -29,9 +29,11 @@ class MetaDriveEnvWrapper:
         self._last_discrete_action = 0
         self.prev_longitudinal = None
         self.stuck_step = 0
+
         self.reward_function.reset()
         self.observation_builder.reset()
         raw_obs, info = self.env.reset()
+
         info = self._enrich_info(info)
         processed_obs = self.observation_builder.build(
             self.env, raw_obs, info, prev_action_idx = 0
@@ -111,7 +113,10 @@ class MetaDriveEnvWrapper:
         vehicle = self.env.agent
         lane = vehicle.lane
 
-        long, _ = lane.local_coordinates(vehicle.position)
+        try:
+            long, _ = lane.local_coordinates(vehicle.position)
+        except Exception:
+            long = 0.0
 
         future_distances = [5, 10, 20, 35]
         features = []
@@ -124,14 +129,39 @@ class MetaDriveEnvWrapper:
         rotation = np.array([[cos_h, -sin_h], [sin_h, cos_h]])
 
         for d in future_distances:
-            future_long = long + d
+            remaining = d
+            current_lane = lane
+            cur_long = long
+            found = False
 
             try:
-                future_world_pos = np.array(lane.position(future_long, 0))
-                future_heading = lane.heading_theta_at(future_long)
+                while current_lane is not None and remaining >= 0:
+                    lane_length = float(getattr(current_lane, "length", 0.0) or 0.0)
+
+                    # distance available on this lane from cur_long to end
+                    avail = max(0.0, lane_length - cur_long)
+
+                    if remaining <= avail:
+                        # point lies on this lane
+                        future_world_pos = np.array(current_lane.position(cur_long + remaining, 0))
+                        future_heading = current_lane.heading_theta_at(cur_long + remaining)
+                        found = True
+                        break
+                    else:
+                        # advance to next lane
+                        remaining -= avail
+                        cur_long = 0.0
+                        # choose the next lane that best matches current heading
+                        next_lanes = getattr(current_lane, "next_lanes", None) or []
+                        if not next_lanes:
+                            current_lane = None
+                            break
+                        current_lane = self._select_best_lane(next_lanes, vehicle.heading_theta)
+
+                if not found:
+                    raise RuntimeError("Could not sample future point on lane chain")
 
                 heading_diff = self.normalize_angle(future_heading - vehicle_heading) / np.pi
-
                 curvature = np.clip((heading_diff / max(d, 1.0)) * 10, -1, 1)
 
                 relative_world = (future_world_pos - vehicle_pos)
