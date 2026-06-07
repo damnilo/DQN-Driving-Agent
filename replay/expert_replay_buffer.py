@@ -66,21 +66,33 @@ class ExpertReplayBuffer:
         maps_all = data["maps"]
 
         if maps_all.dtype.kind in {'U', 'S'}:
-            maps_all = np.array([m.decode("utf-8").rstrip("\x00") for m in maps_all])
+            cleaned = []
+            for m in maps_all:
+                if isinstance(m, (bytes, bytearray)):
+                    try:
+                        s = m.decode("utf-8")
+                    except Exception:
+                        s = str(m)
+                else:
+                    s = str(m)
 
-        transition = []
+                cleaned.append(s.rstrip("\x00"))
+
+            maps_all = np.array(cleaned)
+
+        transitions = []
 
         for i in range(len(obs_all)):
             maps_str = str(maps_all[i])
-            
+
             if map_filter and maps_str not in map_filter:
                 continue
-            
 
             discrete_action = discretize_action(float(actions_all[i][0]), float(actions_all[i][1]))
-            transition.append((obs_all[i], int(discrete_action), float(rewards_all[i]), next_obs_all[i], bool(dones_all[i])   ))
+            tr = Transition(obs_all[i], int(discrete_action), float(rewards_all[i]), next_obs_all[i], bool(dones_all[i]), priority=self.max_priority)
+            transitions.append(tr)
 
-        self._expert_buffer = transition
+        self._expert_buffer = transitions
         print(f"[ExpertReplayBuffer] Ucitano {len(self._expert_buffer)} ekspertskih tranzicija")
 
     def push(self, obs, action, reward, next_obs, done):
@@ -129,12 +141,15 @@ class ExpertReplayBuffer:
             raise RuntimeError("Replay Buffer je prazan. Ponovo pokreni collect_idm.py")
         
         if n_agent > 0:
-            weights = (len(self._agent_buffer) * probs[indicies]) ** (-self.BETA)
-            weights /= weights.max()
+            agent_weights = (len(self._agent_buffer) * probs[indicies]) ** (-self.BETA)
+            agent_weights /= agent_weights.max()
+            agent_weights = agent_weights.astype(np.float32)
+            # full weights: experts (first) get weight 1.0, agent samples appended after experts
+            full_weights = np.ones(len(samples), dtype=np.float32)
+            full_weights[len(samples) - len(agent_weights):] = agent_weights
+            weights = full_weights
         else:
             weights = np.ones(len(samples), dtype=np.float32)
-
-        weights = weights.astype(np.float32)
 
         self.BETA = min(1.0, self.BETA + self.BETA_INCREMENT)
 

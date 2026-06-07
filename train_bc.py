@@ -188,16 +188,16 @@ def make_loader(dataset_path, map_family=None, batch_size=256, val_split=0.15):
         return train_loader, val_loader, ds
 
 def main():
-    if not os.path.exists(EXPERT_DATASET.replace(".json", ".npz")):
+    if not os.path.exists(EXPERT_DATASET):
         raise FileNotFoundError
     
-    data = np.load(EXPERT_DATASET.replace(".json", ".npz"), allow_pickle=False)
+    data = np.load(EXPERT_DATASET, allow_pickle=False)
     lengths = [len(x) for x in data["obs"]]
     print("unique obs lengths:", np.unique(lengths))
     print("first obs:", data["obs"][0])
     
     straight_train, straight_val, straight_ds = make_loader(
-        EXPERT_DATASET.replace(".json", ".npz"),
+        EXPERT_DATASET,
         map_family="straight", 
         batch_size=STRAIGHT_BC_CONFIG["batch_size"],
         val_split=STRAIGHT_BC_CONFIG["val_split"]
@@ -222,7 +222,7 @@ def main():
     else:
         print("[BC] No straight data found")
 
-    curve_train, curve_val, curve_ds = make_loader(EXPERT_DATASET.replace(".json", ".npz"), map_family="curve")
+    curve_train, curve_val, curve_ds = make_loader(EXPERT_DATASET, map_family="curve")
 
     curve_trainer = BCTrainer(agent, CURVE_BC_CONFIG, obs_size, checkpoint_path=BC_CHECKPOINT_CURVE)
     if curve_train:

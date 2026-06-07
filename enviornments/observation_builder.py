@@ -47,7 +47,7 @@ class ObservationBuilder:
         prev_action_feat = np.atleast_1d(prev_action_feat)
         future_hint = np.atleast_1d(future_hint)
 
-        return np.concatenate([ego, nav, lidar, sensor_extras, nav_extras, prev_action_feat, future_hint]).astype(np.float32)
+        return np.concatenate([ego, nav, sensor_extras, nav_extras, prev_action_feat, future_hint, lidar]).astype(np.float32)
     
     def _nav_extras(self, info):
         nav_cmd = float(info.get("navigation_command_float", 0.0))

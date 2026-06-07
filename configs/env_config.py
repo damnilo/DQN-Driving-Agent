@@ -27,7 +27,7 @@ TRAIN_CONFIG = {
 
 CURVE_TRAIN_CONFIG = {
     "batch_size": 32,
-    "gamma": 0.97,
+    "gamma": 0.99,
     "lr": 5e-5,
     "replay_capacity": 150_000,
     "min_replay_size": 10_000,
@@ -37,7 +37,7 @@ CURVE_TRAIN_CONFIG = {
 EXPERT_RATIO = 0.3
 EXPERT_RATIO_CURVE = 0.15
 PRETRAIN_DQN_STEPS = 0
-EXPERT_DATASET = "dataset/expert_dataset.json"
+EXPERT_DATASET = "dataset/expert_dataset.npz"
 
 EVAL_EPISODES_PER_MAP = 10
 

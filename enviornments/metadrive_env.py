@@ -93,7 +93,7 @@ class MetaDriveEnvWrapper:
         reward = self.reward_function.compute(info)
         processed_obs = self.observation_builder.build(self.env, raw_obs, info, prev_action_idx=self._last_discrete_action)
         future_features = self.get_future_waypoint_features()
-        processed_obs = np.concatenate([processed_obs, future_features]).astype(np.float32)
+        processed_obs = np.concatenate([future_features, processed_obs]).astype(np.float32)
         return processed_obs, reward, terminated, truncated, info
 
     def _enrich_info(self, info):

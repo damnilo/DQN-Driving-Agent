@@ -152,7 +152,7 @@ def main():
     all_dones = np.array([d for ep in episodes for d in ep["dones"]], dtype=bool)
     all_maps = np.array([ep["map"] for ep in episodes for _ in ep["actions"]], dtype="U4")
 
-    np.savez_compressed(EXPERT_DATASET.replace(".json", ".npz"),
+    np.savez_compressed(EXPERT_DATASET,
         obs=all_obs,
         next_obs=all_next_obs,
         actions=all_actions,
