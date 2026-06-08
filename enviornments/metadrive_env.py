@@ -40,7 +40,7 @@ class MetaDriveEnvWrapper:
         )
         future_features = self.get_future_waypoint_features()
 
-        processed_obs = np.concatenate([processed_obs, future_features]).astype(np.float32)
+        processed_obs = np.concatenate([future_features, processed_obs]).astype(np.float32)
         if self.obs_size is None:
             self.obs_size = len(processed_obs)
 
@@ -175,3 +175,16 @@ class MetaDriveEnvWrapper:
                 features.extend([0.0, 0.0, 0.0, 0.0])
 
         return np.array(features, dtype=np.float32)
+    
+    def _select_best_lane(self, lanes, heading):
+        best, best_diff = lanes[0], float("inf")
+        
+        for lane in lanes:
+            try:
+                diff = abs(self.normalize_angle(lane.heading_theta_at(0) - heading))
+                if diff < best_diff:
+                    best, best_diff = lane, diff
+            except Exception:
+                pass
+
+        return best

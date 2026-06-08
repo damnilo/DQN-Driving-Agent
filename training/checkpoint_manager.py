@@ -17,7 +17,7 @@ class CheckpointManager:
 
     def load(self, filepath, agent, optimizer):
 
-        checkpoint = torch.load(filepath)
+        checkpoint = torch.load(filepath, map_location="cpu", weights_only=True)
 
         agent.online_net.load_state_dict(
             checkpoint["online_net"]

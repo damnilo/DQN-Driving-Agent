@@ -55,7 +55,6 @@ class QNetwork(nn.Module):
         else:
             frames = x.unsqueeze(1)
 
-        lidar_idx = self.lidar_len
         per_frame_embs = []
         for t in range(frames.shape[1]):
             frame = frames[:, t, :]

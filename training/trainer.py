@@ -4,7 +4,7 @@ import torch
 import numpy as np
 
 from utils.frame_stack import FrameStack
-from configs.env_config import ENV_CONFIG, EXPERT_RATIO, EXPERT_RATIO_CURVE
+from configs.env_config import ENV_CONFIG, EXPERT_RATIO
 
 class Trainer:
 
@@ -82,7 +82,7 @@ class Trainer:
                 loss = self.train_step(batch)
                 losses.append(loss)
 
-            tau = 0.005
+            tau = self.config.get("tau", 0.005)
             for target_param, online_param in zip(self.agent.target_net.parameters(), self.agent.online_net.parameters()):
                 target_param.data.copy_(tau * online_param.data + (1.0 - tau) * target_param.data)
 
@@ -122,7 +122,7 @@ class Trainer:
             max_target_q = target_q.gather(1, next_action).squeeze(1)
 
             targets = rewards_t + (1.0 - dones_t) * self.config["gamma"] * max_target_q
-            
+
         action_q = self.agent.online_net(states_t)
 
         if torch.isnan(action_q).any():

@@ -1,5 +1,5 @@
 from utils.frame_stack import FrameStack
-from configs.env_config import ENV_CONFIG
+from configs.env_config import ENV_CONFIG, FRAME_STACK
 from enviornments.metadrive_env import MetaDriveEnvWrapper
 
 
@@ -38,7 +38,7 @@ class Evaluator:
 
         try:
             for episode in range(num_episodes):
-                frame_stack = FrameStack(stack_size=4)
+                frame_stack = FrameStack(stack_size=FRAME_STACK)
 
                 state, _ = eval_env.reset()
                 state = frame_stack.reset(state)

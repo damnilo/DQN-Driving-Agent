@@ -36,7 +36,7 @@ class CurveTrainer(Trainer):
                 loss = self.train_step(batch)
                 losses.append(loss)
 
-            tau = 0.005
+            tau = self.config.get("tau", 0.005)
             for tp, op in zip(self.agent.target_net.parameters(), self.agent.online_net.parameters()):
                 tp.data.copy_(tau * op.data + (1.0 - tau) * tp.data)
 

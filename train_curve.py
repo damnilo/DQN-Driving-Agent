@@ -2,7 +2,8 @@ import torch
 import os
 import random
 import numpy as np
-from enviornments.metadrive_env import MetaDriveEnvWrapper  
+from enviornments.metadrive_env import MetaDriveEnvWrapper
+from enviornments.action_mapper import ActionMapper 
 from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
 from replay.expert_replay_buffer import ExpertReplayBuffer
@@ -12,25 +13,20 @@ from training.checkpoint_manager import CheckpointManager
 from utils.logger import Logger
 from configs.env_config import *
 
-CURVE_MAPS = ["SSSS", "SCSC", "CSCS", "CCCC"]
+CURVE_MAPS = ["SCSC", "CSCS", "CCCC"]
 EVAL_FREQ = 40
 MAX_EPISODES = 4000
 
 CURRICULUM_STAGES = [
-    (0, ["SSSS", "CSCS"], [0.07, 0.93], 0.0),
-    (400, ["SSSS", "SCSC", "CSCS"], [0.07, 0.42, 0.51], 0.0),
-    (900, ["SSSS", "SCSC", "CSCS", "CCCC"], [0.07, 0.33, 0.30, 0.30], 0.1),
-    (1600, ["SSSS", "SCSC", "CSCS", "CCCC"], [0.07, 0.24, 0.24, 0.45], 0.2)
+    (0, ["SCSC", "CSCS"], [0.50, 0.50], 0.0),
+    (800, ["CCCC", "SCSC", "CSCS"], [0.33, 0.33, 0.34], 0.0),
 ]
 
 # Straight retention parameters
 STRAIGHT_RETENTION_THRESHOLD = 0.85
 STRAIGHT_BOOST_AMOUNT = 0.12
 STRAIGHT_BOOST_DURATION = 500
-
-def ActionMapper_num_actions():
-    from enviornments.action_mapper import ActionMapper
-    return ActionMapper().num_actions()
+NUM_ACTIONS = ActionMapper().num_actions()
 
 def pick_curve_map(episode, straight_boost=0.0):
     stage = CURRICULUM_STAGES[0]
@@ -71,7 +67,7 @@ def main():
 
     agent = DQNAgent(
         input_size=obs_size,
-        num_actions=ActionMapper_num_actions(),
+        num_actions=NUM_ACTIONS,
         epsilon_scheduler=epsilon_scheduler
     )
 
@@ -96,7 +92,7 @@ def main():
     replay_buffer = ExpertReplayBuffer(
         capacity=CURVE_TRAIN_CONFIG["replay_capacity"],
         expert_dataset_path=EXPERT_DATASET,
-        num_actions=ActionMapper_num_actions(),
+        num_actions=NUM_ACTIONS,
         expert_ratio=EXPERT_RATIO_CURVE,
         map_filter={"SCSC", "CSCS", "CCCC", "4"}
     )

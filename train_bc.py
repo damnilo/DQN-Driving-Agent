@@ -226,7 +226,7 @@ def main():
 
     curve_trainer = BCTrainer(agent, CURVE_BC_CONFIG, obs_size, checkpoint_path=BC_CHECKPOINT_CURVE)
     if curve_train:
-        curve_trainer.train(curve_train, curve_val, lr = CURVE_BC_CONFIG["lr"] * 0.3, tag="curve")
+        curve_trainer.train(curve_train, curve_val, lr = CURVE_BC_CONFIG["lr"] * CURVE_BC_CONFIG["lr_scale"], tag="curve")
 
 if __name__ == "__main__":
     main()

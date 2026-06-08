@@ -18,6 +18,7 @@ FRAME_STACK = 4
 
 TRAIN_CONFIG = {
     "batch_size": 64,
+    "tau": 0.005,
     "gamma" : 0.99,
     "lr": 1e-4,
     "replay_capacity": 150_000,
@@ -27,6 +28,7 @@ TRAIN_CONFIG = {
 
 CURVE_TRAIN_CONFIG = {
     "batch_size": 32,
+    "tau": 0.005,
     "gamma": 0.99,
     "lr": 5e-5,
     "replay_capacity": 150_000,
@@ -34,9 +36,8 @@ CURVE_TRAIN_CONFIG = {
     "target_update_freq": None
 }
 
-EXPERT_RATIO = 0.3
-EXPERT_RATIO_CURVE = 0.15
-PRETRAIN_DQN_STEPS = 0
+EXPERT_RATIO = 0.0
+EXPERT_RATIO_CURVE = 0.10
 EXPERT_DATASET = "dataset/expert_dataset.npz"
 
 EVAL_EPISODES_PER_MAP = 10
@@ -63,6 +64,7 @@ BC_CHECKPOINT_CURVE = "checkpoints/bc_pretrain_curve.pt"
 CURVE_BC_CONFIG = {
     "epochs": 80,
     "batch_size": 256,
+    "lr_scale": 0.3,
     "lr": 2e-4,
     "val_split": 0.15,
     "patience": 20,

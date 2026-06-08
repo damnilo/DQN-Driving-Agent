@@ -1,4 +1,5 @@
 import numpy as np
+from enviornments.action_mapper import ActionMapper
 
 class ObservationBuilder:
 
@@ -8,6 +9,7 @@ class ObservationBuilder:
 
     def __init__(self):
         self._action_map = None
+        self.num_actions = ActionMapper().num_actions()
 
     def reset(self):
         self.prev_action_idx = 0
@@ -24,7 +26,6 @@ class ObservationBuilder:
 
         sensor_extras = self._sensor_extras(env)
         nav_extras = self._nav_extras(info)
-        future_hint = self._nav_extras(info)[:2]
 
         # Prev action may be a scalar index or a pair [steering_idx, throttle_idx].
         if isinstance(prev_action_idx, (list, tuple, np.ndarray)):
@@ -36,7 +37,7 @@ class ObservationBuilder:
                 prev_action_feat = np.asarray([float(arr[0]), float(arr[1])], dtype=np.float32)
         else:
             # keep two-element feature for compatibility
-            prev_action_feat = np.asarray([float(prev_action_idx), 0.0], dtype=np.float32)
+            prev_action_feat = np.asarray([float(prev_action_idx) / (self.num_actions - 1)], dtype=np.float32)
 
         # Ensure all pieces are 1-D arrays before concatenation
         ego = np.atleast_1d(ego)
@@ -45,9 +46,8 @@ class ObservationBuilder:
         sensor_extras = np.atleast_1d(sensor_extras)
         nav_extras = np.atleast_1d(nav_extras)
         prev_action_feat = np.atleast_1d(prev_action_feat)
-        future_hint = np.atleast_1d(future_hint)
 
-        return np.concatenate([ego, nav, sensor_extras, nav_extras, prev_action_feat, future_hint, lidar]).astype(np.float32)
+        return np.concatenate([ego, nav, sensor_extras, nav_extras, prev_action_feat, lidar]).astype(np.float32)
     
     def _nav_extras(self, info):
         nav_cmd = float(info.get("navigation_command_float", 0.0))

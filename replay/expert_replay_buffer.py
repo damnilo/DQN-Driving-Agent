@@ -1,4 +1,4 @@
-import json
+import zipfile
 import random
 import numpy as np
 from collections import deque
@@ -51,8 +51,8 @@ class ExpertReplayBuffer:
 
             return
 
-        except json.JSONDecodeError as e:
-            print(f"[ExpertReplayBuffer] Ostecen JSON: {path}")
+        except (OSError, ValueError, zipfile.BadZipFile) as e:
+            print(f"[ExpertReplayBuffer] Ostecen dataset: {path}")
             print(f"  {e}")
             print("  Pokreni: python salvage_dataset.py")
             print("  Ili ponovo: python collect_idm.py")
@@ -126,22 +126,22 @@ class ExpertReplayBuffer:
             probs = priorities ** self.ALPHA
             probs /= probs.sum()
 
-            indicies = np.random.choice(
+            indices = np.random.choice(
                 len(self._agent_buffer),
                 size=min(n_agent, len(self._agent_buffer)),
                 p=probs
             )
 
-            agent_samples = [self._agent_buffer[i] for i in indicies]
+            agent_samples = [self._agent_buffer[i] for i in indices]
             samples += agent_samples
         else:
-            indicies = np.array([], dtype=np.int64)
+            indices = np.array([], dtype=np.int64)
 
         if not samples:
             raise RuntimeError("Replay Buffer je prazan. Ponovo pokreni collect_idm.py")
         
         if n_agent > 0:
-            agent_weights = (len(self._agent_buffer) * probs[indicies]) ** (-self.BETA)
+            agent_weights = (len(self._agent_buffer) * probs[indices]) ** (-self.BETA)
             agent_weights /= agent_weights.max()
             agent_weights = agent_weights.astype(np.float32)
             # full weights: experts (first) get weight 1.0, agent samples appended after experts
@@ -161,11 +161,11 @@ class ExpertReplayBuffer:
 
         return (np.array(obs_arr, dtype=np.float32), np.array(actions_arr, dtype=np.int64),
                 np.array(rewards_arr, dtype=np.float32), np.array(next_obs_arr, dtype=np.float32),
-                np.array(dones_arr, dtype=np.float32), indicies, weights)
+                np.array(dones_arr, dtype=np.float32), indices, weights)
     
-    def update_priorities(self, indicies, td_errors):
+    def update_priorities(self, indices, td_errors):
         
-        for idx, td_error in zip(indicies, td_errors):
+        for idx, td_error in zip(indices, td_errors):
             td_error_arr = np.asarray(td_error)
             if td_error_arr.size != 1:
                 td_error_arr = td_error_arr.reshape(-1)[0]

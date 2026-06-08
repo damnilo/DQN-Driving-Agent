@@ -19,6 +19,7 @@ class DQNAgent:
         self.num_actions = num_actions
         self.epsilon_scheduler = epsilon_scheduler
 
+        self.device = next(self.online_net.parameters()).device
         self.target_net.load_state_dict(self.online_net.state_dict())
 
     def select_action(self, state, step, training):
@@ -29,11 +30,9 @@ class DQNAgent:
             action = random.randint(0, self.num_actions - 1)
 
             return action
-
-        device = next(self.online_net.parameters()).device
         
         state_t = torch.as_tensor(
-            state, dtype=torch.float32, device=device
+            state, dtype=torch.float32, device=self.device
         ).unsqueeze(0)
 
         with torch.no_grad():
@@ -42,11 +41,3 @@ class DQNAgent:
             action = torch.argmax(q_values, dim=1).item()
 
         return action
-    
-    def update_target_network(self):
-
-        self.target_net.load_state_dict(
-            self.online_net.state_dict()
-        )
-
-        self.target_net.eval()
