@@ -4,9 +4,9 @@ from enviornments.metadrive_env import MetaDriveEnvWrapper
 from agents.dqn_agent import DQNAgent
 from utils.frame_stack import FrameStack
 from agents.epsilon_scheduler import EpsilonScheduler
-from configs.env_config import ENV_CONFIG
+from configs.env_config import ENV_CONFIG, FRAME_STACK
 
-MAPS_TEST = ["SSSS", "SCSC", "CSCS", "CCCC", 4]
+MAPS_TEST = ["SSSS", "SCSC", "CSCS", "CCCC"]
 EPISODES_PER_MAP = 3
 
 def get_checkpoint_for_map(map_name):
@@ -18,15 +18,12 @@ def get_checkpoint_for_map(map_name):
         return "checkpoints/straight_final.pt"
 
 def run_episode(env, agent, render=True):
-    frame_stack = FrameStack(stack_size=4)
+    frame_stack = FrameStack(stack_size=FRAME_STACK)
 
     obs, info = env.reset()
     obs = frame_stack.reset(obs)
 
-    next_obs, _, term, trunc, info = env.step_continuous([0.0, 0.3])
-    if not (term or trunc):
-        obs = frame_stack.step(next_obs)
-
+    am = ActionMapper()
     done = False
     total_reward = 0.0
     step = 0
@@ -48,7 +45,6 @@ def run_episode(env, agent, render=True):
 
         if prev_action is not None:
             from enviornments.action_mapper import ActionMapper
-            am = ActionMapper()
             prev_s = am.map(prev_action)[0]
             curr_s = am.map(action)[0]
             jerk_sum += abs(curr_s - prev_s)
@@ -85,7 +81,7 @@ def main():
     temp_config = dict(ENV_CONFIG)
     temp_env = MetaDriveEnvWrapper(temp_config)
     obs, _ = temp_env.reset()
-    obs_size = len(obs) * 4
+    obs_size = len(obs) * FRAME_STACK
     action_dim = temp_env.num_actions()
     temp_env.close()
 

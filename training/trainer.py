@@ -1,10 +1,7 @@
-import random
-
 import torch
 import numpy as np
 
 from utils.frame_stack import FrameStack
-from configs.env_config import ENV_CONFIG, EXPERT_RATIO
 
 class Trainer:
 
@@ -107,7 +104,7 @@ class Trainer:
     
     def train_step(self, batch):
 
-        states, actions, rewards, next_states, dones, indicies, weights = batch
+        states, actions, rewards, next_states, dones, indices, weights = batch
 
         states_t = torch.as_tensor(states, dtype=torch.float32, device=self.device)
         actions_t = torch.as_tensor(actions, dtype=torch.int64, device=self.device)
@@ -145,5 +142,5 @@ class Trainer:
         
         self.optimizer.step()
         td_errors = (action_q - targets).detach().cpu().numpy()
-        self.replay_buffer.update_priorities(indicies, td_errors)
+        self.replay_buffer.update_priorities(indices, td_errors)
         return float(loss.item())

@@ -171,14 +171,6 @@ def main():
                     )
                     print(f"[Checkpoint] Novi best_curve.pt: {curve_score:.3f}")
 
-                # Straight retention check: evaluate SSSS performance and boost if needed
-                ssss_res = results.get("SSSS", {})
-                ssss_rate = ssss_res.get("success_rate", 0.0)
-                if ssss_rate < STRAIGHT_RETENTION_THRESHOLD:
-                    straight_boost = STRAIGHT_BOOST_AMOUNT
-                    straight_boost_until = episode + STRAIGHT_BOOST_DURATION
-                    print(f"[StraightRetention] SSSS perf {ssss_rate:.2f} below threshold; boosting for {STRAIGHT_BOOST_DURATION} eps")
-
                 next_map, next_density = pick_curve_map(episode+1, cur_boost)
                 curve_config = dict(ENV_CONFIG)
                 curve_config["map"] = next_map

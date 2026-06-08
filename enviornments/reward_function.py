@@ -27,7 +27,7 @@ class RewardFunction:
         speed_val = float(info.get("velocity", 0.0))
         heading_err = abs(float(info.get("heading_error", 0.0)))
         lateral = abs(float(info.get("lateral_offset", 0.0)))
-        nav_cmd = info.get("navigation_command", "STRIAGHT")
+        nav_cmd = info.get("navigation_command", "STRAIGHT")
 
         reward = 0.1
 
@@ -59,4 +59,3 @@ class RewardFunction:
     def reset(self):
         self.prev_steering = 0.0
         self.prev_longitudinal = None
-        self.checkpoints_passed = set()

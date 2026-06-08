@@ -18,7 +18,7 @@ class Transition:
         self.priority = priority
 
 STRAIGHT_MAPS = {"SSSS"}
-CURVE_MAPS = {"SCSC", "CSCS", "CCCC", "4"}
+CURVE_MAPS = {"SCSC", "CSCS", "CCCC"}
 
 class ExpertReplayBuffer:
     ALPHA = 0.6
@@ -32,6 +32,7 @@ class ExpertReplayBuffer:
         self.num_actions = num_actions
         self.expert_ratio = expert_ratio
 
+        self.beta = self.BETA
         self._agent_buffer: deque = deque(maxlen=capacity)
         self.max_priority = 1.0
         self._expert_buffer: List[Transition] = []
@@ -141,7 +142,7 @@ class ExpertReplayBuffer:
             raise RuntimeError("Replay Buffer je prazan. Ponovo pokreni collect_idm.py")
         
         if n_agent > 0:
-            agent_weights = (len(self._agent_buffer) * probs[indices]) ** (-self.BETA)
+            agent_weights = (len(self._agent_buffer) * probs[indices]) ** (-self.beta)
             agent_weights /= agent_weights.max()
             agent_weights = agent_weights.astype(np.float32)
             # full weights: experts (first) get weight 1.0, agent samples appended after experts
@@ -151,7 +152,7 @@ class ExpertReplayBuffer:
         else:
             weights = np.ones(len(samples), dtype=np.float32)
 
-        self.BETA = min(1.0, self.BETA + self.BETA_INCREMENT)
+        self.beta = min(1.0, self.beta + self.BETA_INCREMENT)
 
         obs_arr = [t.obs for t in samples]
         actions_arr = [t.action for t in samples]

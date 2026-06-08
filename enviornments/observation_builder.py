@@ -27,19 +27,13 @@ class ObservationBuilder:
         sensor_extras = self._sensor_extras(env)
         nav_extras = self._nav_extras(info)
 
-        # Prev action may be a scalar index or a pair [steering_idx, throttle_idx].
         if isinstance(prev_action_idx, (list, tuple, np.ndarray)):
             arr = np.asarray(prev_action_idx, dtype=np.float32).flatten()
-            if arr.size == 1:
-                prev_action_feat = np.asarray([float(arr[0]), 0.0], dtype=np.float32)
-            else:
-                # ensure exactly two elements
-                prev_action_feat = np.asarray([float(arr[0]), float(arr[1])], dtype=np.float32)
+            val = float([arr[0]])
+            prev_action_feat = np.asarray([val / (self.num_actions - 1)], dtype=np.float32)
         else:
-            # keep two-element feature for compatibility
             prev_action_feat = np.asarray([float(prev_action_idx) / (self.num_actions - 1)], dtype=np.float32)
 
-        # Ensure all pieces are 1-D arrays before concatenation
         ego = np.atleast_1d(ego)
         nav = np.atleast_1d(nav)
         lidar = np.atleast_1d(lidar)

@@ -3,6 +3,7 @@ import numpy as np
 from enviornments.metadrive_env import MetaDriveEnvWrapper
 from metadrive.policy.expert_policy import ExpertPolicy
 from utils.frame_stack import FrameStack
+from utils.action_discretizer import discretize_action
 from configs.env_config import *
 
 NUM_EPISODES = 300
@@ -50,7 +51,7 @@ def main():
     base_config["traffic_density"] = 0.0
     base_config["accident_prob"] = 0.0
     
-    frame_stack = FrameStack(stack_size=4)
+    frame_stack = FrameStack(stack_size=FRAME_STACK)
     
     episodes = []
 
@@ -60,14 +61,14 @@ def main():
     for episode in  range(NUM_EPISODES):
         target_map = map_for_episode(episode, NUM_EPISODES)
 
+        collect_config = dict(base_config)
+        collect_config["map"] = target_map
+        collect_config["start_seed"] = episode * 20
+        collect_config["num_scenarios"] = 20
+
         if env is None or target_map != curr_map:
             if env is not None:
                 env.close()
-
-            collect_config = dict(base_config)
-            collect_config["map"] = target_map
-            collect_config["start_seed"] = episode * 20
-            collect_config["num_scenarios"] = 20
 
             env = MetaDriveEnvWrapper(collect_config)
             curr_map = target_map
@@ -106,8 +107,9 @@ def main():
 
             action = env.engine.get_policy(env.agent.id).act()
             norm_steering, norm_throttle = normalize_action(action[0], action[1])
+            discrete_action = discretize_action(norm_steering, norm_throttle)
 
-            next_obs, reward, terminated, truncated, next_info = env.step(action)
+            next_obs, reward, terminated, truncated, next_info = env.step(discrete_action)
             next_state = frame_stack.step(next_obs)
             done = terminated or truncated
 

@@ -43,12 +43,6 @@ class Evaluator:
                 state, _ = eval_env.reset()
                 state = frame_stack.reset(state)
 
-                next_obs, _, term, trunc, info = eval_env.step_continuous([0.0, 0.3])
-                if not (term or trunc):
-                    state = frame_stack.step(next_obs)
-                else:
-                    state = frame_stack.reset(next_obs)
-
                 done = False
                 total_reward = 0.0
                 info = {}
