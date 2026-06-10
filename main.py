@@ -7,16 +7,16 @@ from utils.frame_stack import FrameStack
 from agents.epsilon_scheduler import EpsilonScheduler
 from configs.env_config import ENV_CONFIG, FRAME_STACK
 
-MAPS_TEST = ["SSSS", "SCSC", "CSCS", "CCCC", 4]
+MAPS_TEST = ["SSSS","SCSC", "CSCS", "CCCC", 4]
 EPISODES_PER_MAP = 3
 
 def get_checkpoint_for_map(map_name):
     if map_name == "SSSS":
-        return "checkpoints/straight_final.pt"
+        return "checkpoints/best_straight.pt"
+    elif map_name == 4:
+        return "checkpoints/best_random.pt"
     else:
-        if os.path.exists("checkpoints/curve_final.pt"):
-            return "checkpoints/curve_final.pt"
-        return "checkpoints/straight_final.pt"
+        return "checkpoints/best_curve.pt"
 
 def run_episode(env, agent, render=True):
     frame_stack = FrameStack(stack_size=FRAME_STACK)
@@ -110,7 +110,7 @@ def main():
 
         successes = 0
 
-        for ep in range(EPISODES_PER_MAP):
+        for ep in range(1):
             config = dict(ENV_CONFIG)
             config["use_render"] = True
             config["map"] = map_name

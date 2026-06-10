@@ -15,6 +15,7 @@ from configs.env_config import *
 
 MAX_EPISODES = 4000
 NUM_ACTIONS = ActionMapper().num_actions()
+TARGET_SUCCESS = 0.90
 
 def main():
     env = MetaDriveEnvWrapper(dict(ENV_CONFIG))
@@ -53,7 +54,7 @@ def main():
         capacity=CURVE_TRAIN_CONFIG["replay_capacity"],
         expert_dataset_path=EXPERT_DATASET,
         num_actions=NUM_ACTIONS,
-        expert_ratio=EXPERT_RATIO_CURVE,
+        expert_ratio=EXPERT_RATIO,
         map_filter={"4"}
     )
 
@@ -88,11 +89,11 @@ def main():
                 trainer._last_map = None
 
                 results = evaluator.evaluate_maps(
-                    maps=["4"],
+                    maps=[4],
                     episodes_per_map=EVAL_EPISODES_PER_MAP,
                 )
 
-                curve_score = results["4"]["success_rate"]
+                curve_score = results[4]["success_rate"]
 
                 if curve_score > best_curve_score:
                     best_curve_score = curve_score
@@ -101,6 +102,10 @@ def main():
                         agent, optimizer, trainer.global_step, episode
                     )
                     print(f"[Checkpoint] Novi best_random.pt: {curve_score:.3f}")
+
+                if best_curve_score >= TARGET_SUCCESS:
+                    print("Dostignut zeljeni uspeh. Prekidam program")
+                    break
 
     except KeyboardInterrupt:
         print("Prekid treninga od strane korisnika.")

@@ -16,6 +16,7 @@ from configs.env_config import *
 CURVE_MAPS = ["SCSC", "CSCS", "CCCC"]
 EVAL_FREQ = 40
 MAX_EPISODES = 4000
+TARGET_SUCCESS = 0.85
 
 CURRICULUM_STAGES = [
     (0, ["SCSC", "CSCS"], [0.50, 0.50], 0.0),
@@ -88,11 +89,7 @@ def main():
 
     logger = Logger(log_dir="logs")
 
-    # dynamic straight boost state
-    straight_boost_until = 0
-    straight_boost = 0.0
-
-    initial_map, initial_density = pick_curve_map(0, straight_boost)
+    initial_map, initial_density = pick_curve_map(0)
     initial_config = dict(ENV_CONFIG)
     initial_config["map"] = initial_map
     initial_config["traffic_density"] = initial_density
@@ -114,13 +111,8 @@ def main():
     try:
 
         for episode in range(MAX_EPISODES):
-            # apply temporary straight boost if active
-            if episode < straight_boost_until:
-                cur_boost = straight_boost
-            else:
-                cur_boost = 0.0
 
-            target_map, density = pick_curve_map(episode, cur_boost)
+            target_map, density = pick_curve_map(episode)
 
             if trainer._last_map != target_map:
                 trainer.env.close()
@@ -160,7 +152,11 @@ def main():
                     )
                     print(f"[Checkpoint] Novi best_curve.pt: {curve_score:.3f}")
 
-                next_map, next_density = pick_curve_map(episode+1, cur_boost)
+                if best_curve_score >= TARGET_SUCCESS:
+                    print(f"[Phase 1] Cilj dostignut ({best_curve_score:.2f}). Zaustavljam")
+                    break
+
+                next_map, next_density = pick_curve_map(episode+1)
                 curve_config = dict(ENV_CONFIG)
                 curve_config["map"] = next_map
                 curve_config["traffic_density"] = next_density
