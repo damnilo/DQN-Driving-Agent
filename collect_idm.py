@@ -29,15 +29,15 @@ def map_for_episode(episode, num_episodes):
     # target distribution: ~22% straight (SSSS), rest mixed
     ratio = episode / max(1, num_episodes)
 
-    if ratio < 0.22:
+    if ratio < 0.18:
         return "SSSS"
-    elif ratio < 0.48:
+    elif ratio < 0.43:
         return "SCSC"
-    elif ratio < 0.74:
+    elif ratio < 0.68:
         return "CSCS"
-    elif ratio < 0.92:
+    elif ratio < 0.85:
         return "CCCC"
-    return "SCSC"
+    return 4
 
 def round_obs(arr, decimals=5):
     return np.round(arr, decimals).tolist()
@@ -63,8 +63,8 @@ def main():
 
         collect_config = dict(base_config)
         collect_config["map"] = target_map
-        collect_config["start_seed"] = episode * 20
-        collect_config["num_scenarios"] = 20
+        collect_config["start_seed"] = 0
+        collect_config["num_scenarios"] = 20 if collect_config["map"] != 4 else 80
 
         if env is None or target_map != curr_map:
             if env is not None:

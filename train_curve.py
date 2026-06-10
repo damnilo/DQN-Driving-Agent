@@ -94,7 +94,7 @@ def main():
         expert_dataset_path=EXPERT_DATASET,
         num_actions=NUM_ACTIONS,
         expert_ratio=EXPERT_RATIO_CURVE,
-        map_filter={"SCSC", "CSCS", "CCCC", "4"}
+        map_filter={"SCSC", "CSCS", "CCCC"}
     )
 
     logger = Logger(log_dir="logs")
