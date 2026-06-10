@@ -171,12 +171,12 @@ class ExpertReplayBuffer:
     
     def update_priorities(self, indices, td_errors):
         
-        for idx, td_error in zip(indices, td_errors):
-            td_error_arr = np.asarray(td_error)
-            if td_error_arr.size != 1:
-                td_error_arr = td_error_arr.reshape(-1)[0]
+        td_errors_arr = np.asarray(td_errors)
+        if td_errors_arr.ndim == 0:
+            td_errors_arr = td_errors_arr.reshape(1)
 
-            priority = float(np.abs(td_error_arr)) + self.EPS
+        for idx, td_error in zip(indices, td_errors_arr):
+            priority = float(np.abs(td_error)) + self.EPS
             self._agent_buffer[idx].priority = priority
 
             if priority > self.max_priority:
