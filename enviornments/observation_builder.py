@@ -29,7 +29,7 @@ class ObservationBuilder:
 
         if isinstance(prev_action_idx, (list, tuple, np.ndarray)):
             arr = np.asarray(prev_action_idx, dtype=np.float32).flatten()
-            val = float([arr[0]])
+            val = float(arr[0])
             prev_action_feat = np.asarray([val / (self.num_actions - 1)], dtype=np.float32)
         else:
             prev_action_feat = np.asarray([float(prev_action_idx) / (self.num_actions - 1)], dtype=np.float32)

@@ -142,5 +142,7 @@ class Trainer:
         
         self.optimizer.step()
         td_errors = (action_q - targets).detach().cpu().numpy()
-        self.replay_buffer.update_priorities(indices, td_errors)
+        if len(indices) > 0:
+            agent_td_errors = td_errors[-len(indices)]
+            self.replay_buffer.update_priorities(indices, agent_td_errors)
         return float(loss.item())

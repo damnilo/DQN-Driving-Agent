@@ -5,6 +5,7 @@ class RewardFunction:
     def __init__(self):
         self.prev_steering = 0.0
         self.prev_longitudinal = None
+        self._prev_dest_progress = None
 
     def compute(self, info):
         if info.get("crash", False):
@@ -50,8 +51,13 @@ class RewardFunction:
         if abs(heading_err) > 0.5:
             reward -= 2.0
 
+        dest_progress = float(info.get("route_completion", 0.0))
+        if self._prev_dest_progress is not None:
+            reward += (dest_progress - self._prev_dest_progress) * 15.0
+
         self.prev_steering = steering
         self.prev_longitudinal = long
+        self._prev_dest_progress = dest_progress
 
         return reward
 
@@ -59,3 +65,4 @@ class RewardFunction:
     def reset(self):
         self.prev_steering = 0.0
         self.prev_longitudinal = None
+        self._prev_dest_progress = None

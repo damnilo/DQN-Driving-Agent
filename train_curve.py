@@ -22,13 +22,9 @@ CURRICULUM_STAGES = [
     (800, ["CCCC", "SCSC", "CSCS"], [0.33, 0.33, 0.34], 0.0),
 ]
 
-# Straight retention parameters
-STRAIGHT_RETENTION_THRESHOLD = 0.85
-STRAIGHT_BOOST_AMOUNT = 0.12
-STRAIGHT_BOOST_DURATION = 500
 NUM_ACTIONS = ActionMapper().num_actions()
 
-def pick_curve_map(episode, straight_boost=0.0):
+def pick_curve_map(episode):
     stage = CURRICULUM_STAGES[0]
     for s in CURRICULUM_STAGES:
         if episode >= s[0]:
@@ -37,13 +33,6 @@ def pick_curve_map(episode, straight_boost=0.0):
 
     # if we have a temporary straight boost, add it to SSSS weight and renormalize
     weights = list(weights)
-    if straight_boost > 0.0 and "SSSS" in maps:
-        idx = maps.index("SSSS")
-        weights[idx] = max(0.0, weights[idx] + straight_boost)
-        # renormalize
-        total = sum(weights)
-        if total > 0:
-            weights = [w / total for w in weights]
 
     chosen = random.choices(maps, weights=weights)[0]
     return chosen, density

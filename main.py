@@ -1,12 +1,13 @@
 import torch
 import os
 from enviornments.metadrive_env import MetaDriveEnvWrapper
+from enviornments.action_mapper import ActionMapper
 from agents.dqn_agent import DQNAgent
 from utils.frame_stack import FrameStack
 from agents.epsilon_scheduler import EpsilonScheduler
 from configs.env_config import ENV_CONFIG, FRAME_STACK
 
-MAPS_TEST = ["SSSS", "SCSC", "CSCS", "CCCC"]
+MAPS_TEST = ["SSSS", "SCSC", "CSCS", "CCCC", 4]
 EPISODES_PER_MAP = 3
 
 def get_checkpoint_for_map(map_name):
@@ -44,7 +45,6 @@ def run_episode(env, agent, render=True):
         max_heading_err = max(heading_err, max_heading_err)
 
         if prev_action is not None:
-            from enviornments.action_mapper import ActionMapper
             prev_s = am.map(prev_action)[0]
             curr_s = am.map(action)[0]
             jerk_sum += abs(curr_s - prev_s)

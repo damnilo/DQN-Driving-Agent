@@ -88,7 +88,7 @@ def main():
                 trainer._last_map = None
 
                 results = evaluator.evaluate_maps(
-                    maps=4,
+                    maps=["4"],
                     episodes_per_map=EVAL_EPISODES_PER_MAP,
                 )
 

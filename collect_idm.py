@@ -118,9 +118,9 @@ def main():
             rewards.append(round(float(reward), 5))
             dones.append(bool(done))
             infos.append({
-                "velocity": round(float(info.get("velocity", 0.0)), 5),
-                "arrive_dest": bool(info.get("arrive_dest", False)),
-                "crash": bool(info.get("crash", False)),
+                "velocity": round(float(next_info.get("velocity", 0.0)), 5),
+                "arrive_dest": bool(next_info.get("arrive_dest", False)),
+                "crash": bool(next_info.get("crash", False)),
                 "out_of_road": bool(info.get("out_of_road", False)),
             })
 

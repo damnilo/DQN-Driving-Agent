@@ -33,7 +33,8 @@ class ExpertReplayBuffer:
         self.expert_ratio = expert_ratio
 
         self.beta = self.BETA
-        self._agent_buffer: deque = deque(maxlen=capacity)
+        self._agent_buffer: list = []
+        self._write_idx: int = 0
         self.max_priority = 1.0
         self._expert_buffer: List[Transition] = []
 
@@ -99,7 +100,11 @@ class ExpertReplayBuffer:
     def push(self, obs, action, reward, next_obs, done):
 
         transition = Transition(obs, action, reward, next_obs, done, priority=self.max_priority)
-        self._agent_buffer.append(transition)
+        if len(self._agent_buffer) < self.capacity:
+            self._agent_buffer.append(transition)
+        else:
+            self._agent_buffer[self._write_idx] = transition
+        self._write_idx = (self._write_idx + 1) % self.capacity 
 
     def sample(self, batch_size):
 
@@ -109,10 +114,10 @@ class ExpertReplayBuffer:
         has_expert = len(self._expert_buffer) > 0
         has_agent = len(self._agent_buffer) >= batch_size
 
-        if has_expert and has_agent:
+        if has_expert and has_agent and self.expert_ratio > 0.0:
             n_expert = int(batch_size * self.expert_ratio)
             n_agent = batch_size - n_expert
-        elif not has_agent and has_expert:
+        elif not has_agent and has_expert and self.expert_ratio > 0.0:
             n_expert = batch_size
             n_agent = 0
 
@@ -189,9 +194,10 @@ class ExpertReplayBuffer:
         return len(self._expert_buffer)
     
     def is_ready(self, min_size):
-        if len(self._expert_buffer) >= min_size:
+        if len(self._expert_buffer) >= min_size and self.expert_ratio > 0:
             return True
         return self.agent_size >= min_size
     
     def clear_agent_buffer(self):
         self._agent_buffer.clear()
+        self._write_idx = 0
