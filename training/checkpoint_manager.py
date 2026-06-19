@@ -4,6 +4,9 @@ import torch
 class CheckpointManager:
 
     def save(self, filepath, agent, optimizer, step, episode):
+        """Persists both network state dicts, the optimizer state, global step, and
+        episode number to the given file path."""
+
 
         os.makedirs(os.path.dirname(filepath) or ".", exist_ok = True)
 
@@ -16,6 +19,8 @@ class CheckpointManager:
         }, filepath)
 
     def load(self, filepath, agent, optimizer):
+        """Restores online/target network weights and optimizer state from a checkpoint
+        and returns the saved global step."""
 
         checkpoint = torch.load(filepath, map_location="cpu", weights_only=True)
 

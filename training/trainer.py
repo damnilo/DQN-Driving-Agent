@@ -9,6 +9,9 @@ class Trainer:
     EARLY_EXIT_THRESHOLD = -600
 
     def __init__(self, env, agent, replay_buffer, optimizer, config, logger, scheduler):
+        """Sets up all training components, moves both networks to the available device,
+        and initialises the frame stack and global step counter."""
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.env = env
         self.agent = agent
@@ -32,6 +35,10 @@ class Trainer:
             self.run_episode(episode)
 
     def run_episode(self, episode):
+        """Collects one full episode of transitions, pushes them to the replay buffer,
+        runs a train_step whenever the buffer is ready, and performs soft target-network
+        updates every environment step."""
+
         start_step = self.global_step
         state, _ = self.env.reset()
         state = self.frame_stack.reset(state)
@@ -103,6 +110,9 @@ class Trainer:
         return episode_reward
     
     def train_step(self, batch):
+        """Executes one Double-DQN gradient update weighted by PER importance-sampling
+        weights, clips gradients to norm 1, refreshes transition priorities with the
+        resulting TD errors, and returns the scalar loss."""
 
         states, actions, rewards, next_states, dones, indices, weights = batch
 

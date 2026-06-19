@@ -9,6 +9,10 @@ class CurveTrainer(Trainer):
         super().__init__(env=env, agent=agent, optimizer=optimizer, replay_buffer=replay_buffer, config=config, logger=logger, scheduler=None)
 
     def run_episode(self, episode):
+        """Extends the base run_episode with an early-exit condition that terminates
+        unpromising episodes below EARLY_EXIT_THRESHOLD after at least
+        MIN_STEPS_BEFORE_EXIT steps."""
+        
         start_step = self.global_step
         state, _ = self.env.reset()
         state = self.frame_stack.reset(state)

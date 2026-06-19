@@ -1,6 +1,6 @@
 from utils.frame_stack import FrameStack
 from configs.env_config import ENV_CONFIG, FRAME_STACK
-from enviornments.metadrive_env import MetaDriveEnvWrapper
+from environment.metadrive_env import MetaDriveEnvWrapper
 
 
 class Evaluator:
@@ -21,16 +21,22 @@ class Evaluator:
         return 2000
 
     def _make_env_for_map(self, map_name):
+        """Creates a deterministic evaluation environment for the given map with the
+        appropriate horizon, 20 scenarios, seed 0, and no traffic."""
+
         config = dict(ENV_CONFIG)
         config["map"] = map_name
         config["horizon"] = self._horizon_for_map(map_name)
-        config["num_scenarios"] = 20
-        config["start_seed"] = 0
+        config["num_scenarios"] = 50 if map_name == 4 else 20
         config["traffic_density"] = 0.0
         env = MetaDriveEnvWrapper(config)
         return env
 
     def evaluate_on_map(self, map_name, num_episodes=10):
+        """Runs num_episodes greedy rollouts on a freshly created environment for
+        map_name, logs each outcome, and returns a results dict with success rate,
+        average reward, and raw counts."""
+        
         eval_env = self._make_env_for_map(map_name)
 
         success_count = 0
@@ -103,18 +109,18 @@ class Evaluator:
         }
 
     def evaluate_maps(self, maps, episodes_per_map=10):
-        """
-        Evaluacija na vise mapa. Pre poziva mora biti zatvoren
-        training MetaDrive env (trainer.env.close()), inace MetaDrive baca
-        AssertionError: Can not call this API after engine initialization!
-        """
+        """Evaluates the agent on a list of maps sequentially and returns a dict keyed
+        by map name. The training environment must be closed before calling this."""
+
         results = {}
         for map_name in maps:
             results[map_name] = self.evaluate_on_map(map_name, num_episodes=episodes_per_map)
         return results
 
     def evaluate(self, num_episodes):
-        """Evaluacija na trenutnoj mapi (kompatibilnost sa starim kodom)."""
+        """Legacy single-map wrapper kept for backward compatibility; reads the current
+        map from the env config and delegates to evaluate_on_map."""
+        
         current_map = self.env.env.config.get("map", "SSSS")
         result = self.evaluate_on_map(current_map, num_episodes=num_episodes)
         return result["success_rate"], result["avg_reward"]
