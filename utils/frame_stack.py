@@ -8,6 +8,9 @@ class FrameStack:
         self.frames = deque(maxlen=stack_size)
 
     def reset(self, initial_observation):
+        """Fills the buffer with (stack_size - 1) zero frames followed by the initial
+        observation and returns the first stacked state."""
+
         self.frames.clear()
 
         zero_frame = np.zeros_like(initial_observation, dtype=np.float32)
@@ -19,6 +22,9 @@ class FrameStack:
         return self._get_stacked_state()
     
     def step(self, observation):
+        """Appends the new observation to the rolling buffer, dropping the oldest frame,
+        and returns the updated stacked state."""
+        
         self.frames.append(observation.astype(np.float32))
 
         return self._get_stacked_state()

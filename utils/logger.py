@@ -4,19 +4,11 @@ from datetime import datetime
 
 
 class Logger:
-    """
-    Logs training and evaluation metrics to:
-        - Console (stdout)
-        - CSV file  (logs/training_TIMESTAMP.csv)
-
-    Training columns:
-        episode, reward, epsilon, avg_loss, steps
-
-    Evaluation columns:
-        episode, reward, success, collision
-    """
 
     def __init__(self, log_dir: str = "logs"):
+        """Creates timestamped training and evaluation CSV files under log_dir and writes
+        their column headers."""
+        
         os.makedirs(log_dir, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -40,8 +32,6 @@ class Logger:
         print(f"[Logger] Training log  → {train_path}")
         print(f"[Logger] Evaluation log → {eval_path}")
 
-    # ------------------------------------------------------------------
-
     def log_episode(
         self,
         episode: int,
@@ -51,6 +41,9 @@ class Logger:
         global_step: int = 0,
         steps: int = 0,
     ):
+        """Writes one training-episode row to the training CSV and prints a formatted
+        summary line to stdout."""
+        
         self._train_writer.writerow(
             [episode, f"{reward:.2f}", f"{epsilon:.4f}", f"{avg_loss:.6f}", global_step, steps]
         )
@@ -74,6 +67,9 @@ class Logger:
         collision: bool,
         map_name: str = "unknown",
     ):
+        """Writes one evaluation-episode row with binary outcome flags to the evaluation
+        CSV."""
+        
         self._eval_writer.writerow(
             [map_name, episode, f"{reward:.2f}", int(success), int(collision), int(out_of_road)]
         )
