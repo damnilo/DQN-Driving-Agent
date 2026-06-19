@@ -22,6 +22,8 @@ class DQNAgent:
         self.target_net.load_state_dict(self.online_net.state_dict())
 
     def select_action(self, state, step, training):
+        """Returns a random action with probability ε during training, otherwise greedily
+        selects the action with the highest Q-value from the online network."""
 
         epsilon = self.epsilon_scheduler.get_epsilon(step)
 

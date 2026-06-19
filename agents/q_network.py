@@ -6,6 +6,10 @@ from configs.env_config import FRAME_STACK
 class QNetwork(nn.Module):
 
     def __init__(self, input_size, num_actions, lidar_len=240, gru_hidden=256):
+        """Builds a 1-D conv encoder for the lidar slice, a linear projection for the
+        non-lidar slice, a GRU over the stacked-frame sequence, and separate value /
+        advantage heads for Dueling DQN."""
+        
         super().__init__()
 
         self.input_size = input_size
@@ -49,6 +53,10 @@ class QNetwork(nn.Module):
         )
 
     def forward(self, x):
+        """Reshapes the flat input into frames, encodes each frame's lidar and non-lidar
+        parts independently, feeds the sequence through the GRU, then combines value and
+        advantage streams into Q-values."""
+
         bsz = x.shape[0]
         if self.frame_stack > 1:
             frames = x.view(bsz, self.frame_stack, self.frame_size)

@@ -10,6 +10,9 @@ class EpsilonScheduler:
         self.warmup_steps = warmup_steps
 
     def get_epsilon(self, step):
+        """Holds ε at `start` during the warmup window, then linearly interpolates it
+        down to `end` over `decay` steps."""
+        
         if step < self.warmup_steps:
             return self.start
 
