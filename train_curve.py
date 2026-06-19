@@ -2,8 +2,8 @@ import torch
 import os
 import random
 import numpy as np
-from enviornments.metadrive_env import MetaDriveEnvWrapper
-from enviornments.action_mapper import ActionMapper 
+from environment.metadrive_env import MetaDriveEnvWrapper
+from environment.action_mapper import ActionMapper 
 from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
 from replay.expert_replay_buffer import ExpertReplayBuffer
@@ -14,7 +14,6 @@ from utils.logger import Logger
 from configs.env_config import *
 
 CURVE_MAPS = ["SCSC", "CSCS", "CCCC"]
-EVAL_FREQ = 40
 MAX_EPISODES = 4000
 TARGET_SUCCESS = 0.85
 
@@ -26,13 +25,15 @@ CURRICULUM_STAGES = [
 NUM_ACTIONS = ActionMapper().num_actions()
 
 def pick_curve_map(episode):
+    """Consults the curriculum schedule and returns the (map, traffic_density) pair
+    for the current episode, introducing CCCC maps after episode 800."""
+
     stage = CURRICULUM_STAGES[0]
     for s in CURRICULUM_STAGES:
         if episode >= s[0]:
             stage = s
     _, maps, weights, density = stage
 
-    # if we have a temporary straight boost, add it to SSSS weight and renormalize
     weights = list(weights)
 
     chosen = random.choices(maps, weights=weights)[0]
@@ -47,13 +48,17 @@ def _horizon_for_map(map):
     return 800
 
 def main():
+    """Initialises the agent from the straight checkpoint, runs the curve curriculum
+    with CurveTrainer, evaluates on SCSC/CSCS/CCCC every EVAL_FREQ episodes, and
+    saves best_curve.pt whenever the composite success rate improves."""
+    
     env = MetaDriveEnvWrapper(dict(ENV_CONFIG))
 
     env.reset()
     obs_size = env.obs_size * FRAME_STACK
     env.close()
 
-    epsilon_scheduler = EpsilonScheduler(**CURVE_EPSILON_CONFIG)
+    epsilon_scheduler = EpsilonScheduler(**EPSILON_CONFIG)
 
     agent = DQNAgent(
         input_size=obs_size,
@@ -65,7 +70,7 @@ def main():
     agent.online_net.to(device)
     agent.target_net.to(device)
 
-    optimizer = torch.optim.Adam(agent.online_net.parameters(), lr = CURVE_TRAIN_CONFIG["lr"])
+    optimizer = torch.optim.Adam(agent.online_net.parameters(), lr = TRAIN_CONFIG["lr"])
 
     straight_checkpoint = "checkpoints/best_straight.pt"
     if not os.path.exists(straight_checkpoint):
@@ -80,10 +85,10 @@ def main():
     checkpoint_manager = CheckpointManager()
 
     replay_buffer = ExpertReplayBuffer(
-        capacity=CURVE_TRAIN_CONFIG["replay_capacity"],
+        capacity=TRAIN_CONFIG["replay_capacity"],
         expert_dataset_path=EXPERT_DATASET,
         num_actions=NUM_ACTIONS,
-        expert_ratio=EXPERT_RATIO_CURVE,
+        expert_ratio=EXPERT_RATIO,
         map_filter={"SCSC", "CSCS", "CCCC"}
     )
 
@@ -99,7 +104,8 @@ def main():
     train_env=MetaDriveEnvWrapper(initial_config)
 
     trainer = CurveTrainer(
-        env=train_env, agent=agent, replay_buffer=replay_buffer, optimizer=optimizer, config=CURVE_TRAIN_CONFIG, logger=logger
+        env=train_env, agent=agent, replay_buffer=replay_buffer, 
+        optimizer=optimizer, config=TRAIN_CONFIG, logger=logger
     )
     trainer._last_map = initial_map
 
@@ -128,7 +134,7 @@ def main():
 
             trainer.run_episode(episode)
 
-            if (episode + 1) % EVAL_FREQ == 0:
+            if (episode) % EVAL_FREQ == 0:
                 trainer.env.close()
                 trainer._last_map = None
 

@@ -1,8 +1,8 @@
 import torch
 import os
 
-from enviornments.metadrive_env import MetaDriveEnvWrapper
-from enviornments.action_mapper import ActionMapper
+from environment.metadrive_env import MetaDriveEnvWrapper
+from environment.action_mapper import ActionMapper
 from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
 from replay.expert_replay_buffer import ExpertReplayBuffer
@@ -13,10 +13,13 @@ from utils.logger import Logger
 from configs.env_config import *
 
 TARGET_SUCCESS = 0.90
-EVAL_FREQ = 40
 MAX_EPISODES = 2000
 
 def main():
+    """Loads the BC straight checkpoint if present, trains on SSSS maps, evaluates
+    every EVAL_FREQ episodes, and saves best_straight.pt whenever the success rate
+    improves."""
+    
     env = MetaDriveEnvWrapper(dict(ENV_CONFIG))
     env.reset()
     obs_size = env.obs_size * FRAME_STACK

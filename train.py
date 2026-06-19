@@ -2,8 +2,8 @@ import torch
 import os
 import random
 import numpy as np
-from enviornments.metadrive_env import MetaDriveEnvWrapper
-from enviornments.action_mapper import ActionMapper 
+from environment.metadrive_env import MetaDriveEnvWrapper
+from environment.action_mapper import ActionMapper 
 from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
 from replay.expert_replay_buffer import ExpertReplayBuffer
@@ -18,6 +18,13 @@ NUM_ACTIONS = ActionMapper().num_actions()
 TARGET_SUCCESS = 0.90
 
 def main():
+    """Loads the best_curve.pt checkpoint if present, trains on random maps, evaluates
+    every EVAL_FREQ episodes, and saves best_curve.pt whenever the success rate
+    improves."""
+
+    best_curve_score = 0.0
+    episode = 0
+    
     env = MetaDriveEnvWrapper(dict(ENV_CONFIG))
 
     env.reset()
@@ -38,13 +45,11 @@ def main():
 
     optimizer = torch.optim.Adam(agent.online_net.parameters(), lr = CURVE_TRAIN_CONFIG["lr"])
 
-    straight_checkpoint = "checkpoints/best_curve.pt"
-    if not os.path.exists(straight_checkpoint):
-        raise FileNotFoundError("Nema best_curve.pt. Prvo pokreni train_straight.py")
+    checkpoint = "checkpoints/best_curve.pt"
 
-    ckpt = torch.load(straight_checkpoint, map_location="cpu", weights_only=True)
-    agent.online_net.load_state_dict(ckpt["online_net"])
-    agent.target_net.load_state_dict(ckpt["target_net"])
+    ckpt = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    agent.online_net.load_state_dict(ckpt)
+    agent.target_net.load_state_dict(ckpt)
 
     print("[Phase 2] Ucitan best_curve.pt kao polazna tacka")
     
@@ -63,20 +68,18 @@ def main():
     initial_config = dict(ENV_CONFIG)
     initial_config["map"] = 4
     initial_config["traffic_density"] = 0.0
-    initial_config["horizon"] = 1200
+    initial_config["horizon"] = 1000
     initial_config["num_scenarios"] = 50
 
     train_env=MetaDriveEnvWrapper(initial_config)
 
     trainer = CurveTrainer(
-        env=train_env, agent=agent, replay_buffer=replay_buffer, optimizer=optimizer, config=CURVE_TRAIN_CONFIG, logger=logger
+        env=train_env, agent=agent, replay_buffer=replay_buffer, 
+        optimizer=optimizer, config=CURVE_TRAIN_CONFIG, logger=logger
     )
     trainer._last_map = 4
 
     evaluator = Evaluator(env, agent, logger)
-
-    best_curve_score = 0.0
-    episode = 0
 
     try:
 
@@ -84,7 +87,7 @@ def main():
 
             trainer.run_episode(episode)
 
-            if (episode + 1) % EVAL_FREQ == 0:
+            if (episode+1) % EVAL_FREQ == 0:
                 trainer.env.close()
                 trainer._last_map = None
 
@@ -94,6 +97,8 @@ def main():
                 )
 
                 curve_score = results[4]["success_rate"]
+                trainer._last_map = 4
+                evaluator.env = trainer.env
 
                 if curve_score > best_curve_score:
                     best_curve_score = curve_score
