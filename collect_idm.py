@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from enviornments.metadrive_env import MetaDriveEnvWrapper
+from environment.metadrive_env import MetaDriveEnvWrapper
 from metadrive.policy.expert_policy import ExpertPolicy
 from utils.frame_stack import FrameStack
 from utils.action_discretizer import discretize_action
@@ -16,17 +16,20 @@ def normalize_action(steering, throttle):
     return steering, throttle
 
 def reset_with_timeout(env):
-    # MetaDrive / Panda3D must be reset from the main interpreter thread.
-    # The previous threaded approach caused `signal only works in main thread`.
+    """Wraps env.reset() in a bare try/except; replaces the earlier threaded approach
+    which caused 'signal only works in main thread' errors in Panda3D."""
+
     try:
         return env.reset()
     except Exception as e:
-        # If reset gets stuck or fails, let the caller handle restart.
         print(f"env.reset() failed: {e}")
         return None
     
 def map_for_episode(episode, num_episodes):
-    # target distribution: ~22% straight (SSSS), rest mixed
+    """Returns the target map for a given episode following the collection curriculum:
+    ~18 % straight (SSSS), then progressively more curve variants, ending with
+    procedural integer maps for the final 15 %."""
+
     ratio = episode / max(1, num_episodes)
 
     if ratio < 0.18:
@@ -43,6 +46,9 @@ def round_obs(arr, decimals=5):
     return np.round(arr, decimals).tolist()
 
 def main():
+    """Drives the IDM expert-collection loop: iterates through the curriculum,
+    records (obs, action, reward, done) tuples at every step, and saves all
+    transitions to a compressed .npz file."""
 
     os.makedirs("dataset", exist_ok=True)
 
