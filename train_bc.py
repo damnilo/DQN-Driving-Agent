@@ -7,7 +7,7 @@ from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 from agents.dqn_agent import DQNAgent
 from agents.epsilon_scheduler import EpsilonScheduler
 from utils.action_discretizer import discretize_action
-from enviornments.action_mapper import ActionMapper
+from environment.action_mapper import ActionMapper
 from configs.env_config import *
 
 STRAIGHT_MAPS = {"SSSS"}
@@ -15,6 +15,10 @@ CURVE_MAPS = {"SCSC", "CSCS", "CCCC", "4"}
 class ExpertDataset(Dataset):
 
     def __init__(self, path, map_family=None):
+        """Loads the expert .npz, filters observations by map family, discretises
+        continuous actions to flat indices, and stores tensors ready for supervised
+        training."""
+        
         data = np.load(path, allow_pickle=False)
 
         obs_all = data["obs"]
@@ -74,6 +78,9 @@ class BCTrainer:
         return torch.optim.Adam(self.agent.online_net.parameters(), lr=lr)
     
     def train(self, train_loader, val_loader, lr=None, tag=""):
+        """Runs cross-entropy training with cosine LR annealing and early stopping,
+        saving the best-validation-loss weights and reloading them when training ends."""
+
 
         cfg = self.config
         lr = lr or cfg["lr"]
@@ -137,6 +144,9 @@ class BCTrainer:
 
     
 def make_loader(dataset_path, map_family=None, batch_size=256, val_split=0.15):
+        """Creates train and validation DataLoaders from the expert dataset, applying a
+        sqrt-dampened WeightedRandomSampler to balance skewed action-class frequencies."""
+
         ds = ExpertDataset(dataset_path, map_family=map_family)
         if len(ds) == 0:
             return None, None, ds
@@ -145,9 +155,7 @@ def make_loader(dataset_path, map_family=None, batch_size=256, val_split=0.15):
         train_size = len(ds) - val_size
         train_ds, val_ds = torch.utils.data.random_split(ds, [train_size, val_size])
 
-        # Build a WeightedRandomSampler to balance action classes with sqrt dampening
         try:
-            # train_ds is a Subset; get original dataset and indices
             full_actions = ds.actions.numpy()
             train_indices = train_ds.indices
             train_actions = full_actions[train_indices]
@@ -166,8 +174,8 @@ def make_loader(dataset_path, map_family=None, batch_size=256, val_split=0.15):
                 num_workers=0,
                 pin_memory=torch.cuda.is_available()
             )
+
         except Exception:
-            # fallback to simple shuffle if something goes wrong
             train_loader = DataLoader(
                 train_ds, 
                 batch_size=batch_size, 
@@ -187,6 +195,9 @@ def make_loader(dataset_path, map_family=None, batch_size=256, val_split=0.15):
         return train_loader, val_loader, ds
 
 def main():
+    """Trains a BC policy on straight-map data first, then fine-tunes on curve-map
+    data, saving a separate checkpoint for each phase."""
+    
     if not os.path.exists(EXPERT_DATASET):
         raise FileNotFoundError
     
@@ -220,12 +231,6 @@ def main():
         straight_trainer.train(straight_train, straight_val, lr=STRAIGHT_BC_CONFIG["lr"], tag="straight")
     else:
         print("[BC] No straight data found")
-
-    curve_train, curve_val, curve_ds = make_loader(EXPERT_DATASET, map_family="curve")
-
-    curve_trainer = BCTrainer(agent, CURVE_BC_CONFIG, obs_size, checkpoint_path=BC_CHECKPOINT_CURVE)
-    if curve_train:
-        curve_trainer.train(curve_train, curve_val, lr = CURVE_BC_CONFIG["lr"] * CURVE_BC_CONFIG["lr_scale"], tag="curve")
 
 if __name__ == "__main__":
     main()
