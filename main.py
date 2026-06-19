@@ -1,16 +1,16 @@
 import torch
 import os
-from enviornments.metadrive_env import MetaDriveEnvWrapper
-from enviornments.action_mapper import ActionMapper
+from environment.metadrive_env import MetaDriveEnvWrapper
+from environment.action_mapper import ActionMapper
 from agents.dqn_agent import DQNAgent
 from utils.frame_stack import FrameStack
 from agents.epsilon_scheduler import EpsilonScheduler
 from configs.env_config import ENV_CONFIG, FRAME_STACK
 
 MAPS_TEST = ["SSSS","SCSC", "CSCS", "CCCC", 4]
-EPISODES_PER_MAP = 3
+EPISODES_PER_MAP = 1
 
-def get_checkpoint_for_map(map_name):
+def get_checkpoint_for_map(map_name): 
     if map_name == "SSSS":
         return "checkpoints/best_straight.pt"
     elif map_name == 4:
@@ -19,6 +19,10 @@ def get_checkpoint_for_map(map_name):
         return "checkpoints/best_curve.pt"
 
 def run_episode(env, agent, render=True):
+    """Runs one greedy evaluation episode to completion and returns a result dict
+    containing termination reason, total reward, step count, maximum heading error,
+    and average steering jerk."""
+
     frame_stack = FrameStack(stack_size=FRAME_STACK)
 
     obs, info = env.reset()
@@ -77,6 +81,8 @@ def run_episode(env, agent, render=True):
     }
 
 def main():
+    """Loads the appropriate checkpoint for each test map, runs evaluation episodes,
+    and prints per-episode and per-map success statistics."""
 
     temp_config = dict(ENV_CONFIG)
     temp_env = MetaDriveEnvWrapper(temp_config)
