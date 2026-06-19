@@ -4,7 +4,7 @@ import numpy as np
 from collections import deque
 from utils.action_discretizer import discretize_action
 from typing import Tuple, List
-from enviornments.action_mapper import ActionMapper
+from environment.action_mapper import ActionMapper
 from configs.env_config import FRAME_STACK
 
 class Transition:
@@ -27,6 +27,9 @@ class ExpertReplayBuffer:
     EPS = 1e-5
 
     def __init__(self, capacity: int, expert_dataset_path: str, num_actions: int, expert_ratio: float = 0.25, map_filter=None):
+        """Initialises the circular agent buffer and loads expert transitions from the
+        .npz dataset, optionally restricting to a subset of maps."""
+
 
         self.capacity = capacity
         self.num_actions = num_actions
@@ -41,6 +44,9 @@ class ExpertReplayBuffer:
         self._load_expert_data(expert_dataset_path, map_filter)
 
     def _load_expert_data(self, path: str, map_filter=None) -> None:
+        """Loads the expert .npz, decodes and cleans map strings, applies the map
+        filter, discretises continuous (steering, throttle) actions, and populates
+        self._expert_buffer."""
 
         if not path:
             return
@@ -98,6 +104,9 @@ class ExpertReplayBuffer:
         print(f"[ExpertReplayBuffer] Ucitano {len(self._expert_buffer)} ekspertskih tranzicija")
 
     def push(self, obs, action, reward, next_obs, done):
+        """Inserts a new transition into the circular agent buffer at the current
+        max priority so it is guaranteed to be sampled at least once."""
+
 
         transition = Transition(obs, action, reward, next_obs, done, priority=self.max_priority)
         if len(self._agent_buffer) < self.capacity:
@@ -107,6 +116,10 @@ class ExpertReplayBuffer:
         self._write_idx = (self._write_idx + 1) % self.capacity 
 
     def sample(self, batch_size):
+        """Draws a mixed batch of expert (uniform) and agent (prioritised) transitions
+        according to expert_ratio, computes IS weights, increments β, and returns
+        arrays ready for a training step."""
+
 
         n_expert = 0
         n_agent = batch_size
@@ -170,6 +183,9 @@ class ExpertReplayBuffer:
                 np.array(dones_arr, dtype=np.float32), indices, weights)
     
     def update_priorities(self, indices, td_errors):
+        """Updates agent-buffer priorities for the given indices using |TD error| + ε
+        and refreshes max_priority if any new value exceeds it."""
+
         
         td_errors_arr = np.asarray(td_errors)
         if td_errors_arr.ndim == 0:
@@ -194,6 +210,9 @@ class ExpertReplayBuffer:
         return len(self._expert_buffer)
     
     def is_ready(self, min_size):
+        """Returns True when there is enough data to begin training, accepting a
+        sufficiently large expert buffer as a substitute when expert_ratio > 0."""
+
         if len(self._expert_buffer) >= min_size and self.expert_ratio > 0:
             return True
         return self.agent_size >= min_size
