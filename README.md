@@ -158,19 +158,23 @@ The trained agent demonstrated the ability to generalize to new road configurati
 │   ├── dqn_agent.py
 │   ├── epsiolon_scheduler.py
 │   └── q_network.py
+│   
 ├── environment/
 │   ├── action_mapper.py
 │   ├── info_builder.py
 │   ├── metadrive_env.py
 │   ├── observation_builder.py
 │   └── reward_function.py
+│  
 ├── replay/
-    └── expert_replay_buffer.py
+│   └── expert_replay_buffer.py
+│   
 ├── training/
 │   ├── checkpoint_manager.py
 │   ├── curve_trainer.py
 │   ├── evaluator.py
 │   └── trainer.py
+│   
 ├── utils/
 │   ├── action_discretizer.py
 │   ├── frame_stack.py
