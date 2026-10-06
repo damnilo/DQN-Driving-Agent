@@ -55,6 +55,7 @@ class InfoBuilder:
         lane = agent.lane
         long, _ = lane.local_coordinates(agent.position)
         out["longitudinal"] = long
+        out["route_travelled"] = float(getattr(nav, "travelled_length", 0.0) or 0.0)
 
         return out
 

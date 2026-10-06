@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from environment.action_mapper import ActionMapper
 from environment.metadrive_env import MetaDriveEnvWrapper
 from metadrive.policy.expert_policy import ExpertPolicy
 from utils.frame_stack import FrameStack
@@ -58,6 +59,7 @@ def main():
     base_config["accident_prob"] = 0.0
     
     frame_stack = FrameStack(stack_size=FRAME_STACK)
+    action_mapper = ActionMapper()
     
     episodes = []
 
@@ -114,20 +116,21 @@ def main():
             action = env.engine.get_policy(env.agent.id).act()
             norm_steering, norm_throttle = normalize_action(action[0], action[1])
             discrete_action = discretize_action(norm_steering, norm_throttle)
+            executed = action_mapper.map(discrete_action)
 
             next_obs, reward, terminated, truncated, next_info = env.step(discrete_action)
             next_state = frame_stack.step(next_obs)
             done = terminated or truncated
 
             obs_list.append(round_obs(next_state, decimals=4))
-            actions.append([round(norm_steering, 5), round(norm_throttle, 5)])
+            actions.append([round(float(executed[0]), 5), round(float(executed[1]), 5)])
             rewards.append(round(float(reward), 5))
             dones.append(bool(done))
             infos.append({
                 "velocity": round(float(next_info.get("velocity", 0.0)), 5),
                 "arrive_dest": bool(next_info.get("arrive_dest", False)),
                 "crash": bool(next_info.get("crash", False)),
-                "out_of_road": bool(info.get("out_of_road", False)),
+                "out_of_road": bool(next_info.get("out_of_road", False)),
             })
 
             stacked_obs = next_state

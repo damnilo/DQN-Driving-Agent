@@ -17,18 +17,23 @@ class Evaluator:
         if map_name in ("SCSC", "CSCS"):
             return 1000
         if map_name == "CCCC":
-            return 1200
+            return 1400
         return 2000
 
     def _make_env_for_map(self, map_name):
-        """Creates a deterministic evaluation environment for the given map with the
-        appropriate horizon, 20 scenarios, seed 0, and no traffic."""
+        """Creates an evaluation environment for map_name. Procedural maps (integer
+        block count) use seeds 50-69 so they stay outside the training range 0-49."""
 
         config = dict(ENV_CONFIG)
         config["map"] = map_name
         config["horizon"] = self._horizon_for_map(map_name)
-        config["num_scenarios"] = 50 if map_name == 4 else 20
         config["traffic_density"] = 0.0
+        if map_name == 4:
+            config["num_scenarios"] = 20
+            config["start_seed"] = 50
+        else:
+            config["num_scenarios"] = 20
+            config["start_seed"] = 0
         env = MetaDriveEnvWrapper(config)
         return env
 
@@ -70,6 +75,8 @@ class Evaluator:
                     reason = "OUT_OF_ROAD"
                 elif info.get("crash", False):
                     reason = "CRASH"
+                elif info.get("stuck", False):
+                    reason = "STUCK"
                 elif info.get("max_step", False):
                     reason = "TIMEOUT"
 

@@ -1,185 +1,165 @@
 # DQN Driving Agent
 
-A Deep Reinforcement Learning project that trains an autonomous driving agent using the **Deep Q-Network (DQN)** algorithm. The agent learns to navigate procedurally generated road environments, avoid collisions, stay within lane boundaries, and successfully reach the destination through trial-and-error interaction with the environment.
+A Deep Reinforcement Learning project that trains an autonomous driving agent with a **Double Dueling DQN** in [MetaDrive](https://github.com/metadriverse/metadrive). The agent learns lane following on fixed straight and curve maps, then fine-tunes on procedurally generated roads.
 
----
-
-## Project Overview
-
-This project investigates the application of Deep Reinforcement Learning to autonomous driving tasks. A DQN agent is trained in a simulated driving environment where it receives observations from the environment and selects actions from a discrete action space consisting of steering and throttle combinations.
-
-The primary objective is to learn a policy that maximizes long-term reward by:
-
-* Following the road layout
-* Maintaining forward progress
-* Avoiding collisions
-* Staying on the road
-* Successfully completing routes
-
-The project was developed as part of a university seminar work focused on Reinforcement Learning and autonomous vehicle control.
+The project was developed as part of a university seminar on reinforcement learning and autonomous vehicle control.
 
 ---
 
 ## Features
 
-* Double Dueling Deep Q-Network (DQN) implementation using PyTorch
-* Prioritized Experience Replay
-* Target Network stabilization
-* Epsilon-Greedy exploration strategy
-* Reward shaping for driving behavior
-* Training on procedurally generated road maps
-* Evaluation on unseen environments
-* Logging of training statistics
-* Model checkpointing and recovery
+* Double Dueling DQN in PyTorch, with a GRU over a 4-frame stack
+* Prioritized experience replay and a soft-updated target network
+* 28 discrete actions (7 steering values × 4 throttle values)
+* Route-based reward and route waypoints, so lane changes do not cancel progress
+* Staged training: behavior cloning, straight maps, curve maps, then procedural maps
+* Block curriculum on procedural maps (straights and curves, then junctions, then the full MetaDrive mix)
+* Held-out evaluation on seeds the trainer never uses
+* CSV logs and checkpoints
 
 ---
 
-## State Representation
+## Observation
 
-The agent receives a vector of observations describing the current driving state, including information such as:
+Each step builds one vector, then stacks the last 4 frames.
 
-* Vehicle speed
-* Heading error
-* Lateral position
-* Road geometry information
-* LiDAR sensor rays
-* Additional environment-specific features
+The vector starts with 16 waypoint features. Four points on the navigation route, at 5 m, 10 m, 20 m and 35 m, each contribute heading difference, curvature, and the point's position in the vehicle frame. The route follows navigation checkpoints, so at an intersection the waypoints point along the commanded turn.
 
-The observation space is designed to provide sufficient information for lane following and navigation decisions.
+The rest of the vector is:
+
+* 9 ego features and 10 navigation features from MetaDrive's lidar observation
+* Side and lane-line distances
+* Navigation command, distances to the left and right lane boundaries, and lane-centre ratio
+* The previous discrete action, normalised
+* 240 lidar rays
+
+Lidar is encoded by a 1D convolution and pooled to a single vector. The observation size is unchanged from the curve checkpoint, so `checkpoints/best_curve.pt` still loads.
 
 ---
 
 ## Action Space
 
-The continuous vehicle controls are discretized into a finite action space.
+Continuous controls are binned into 28 actions.
 
-### Steering Values
+Steering:
 
 ```python
 [-0.30, -0.18, -0.09, 0.00, 0.09, 0.18, 0.30]
 ```
 
-### Throttle Values
+Throttle:
 
 ```python
 [-0.30, -0.05, 0.25, 0.60]
 ```
 
-Each action represents a unique combination of steering and throttle values.
+---
+
+## Reward
+
+Live reward follows metres travelled along the navigation route (`route_travelled`), clipped per step to [−1, 20] and scaled by 2. A lane change no longer resets the progress term. Heading alignment adds `cos(error) * 0.35`. Lateral offset and steering changes are penalised. There is a small per-step bonus of 0.05.
+
+Terminal rewards:
+
+| Outcome | Reward |
+|---|---|
+| Arrive at destination | +1000 |
+| Crash or out of road | −100 |
+| Horizon reached | −50 |
+| Stuck | −40 |
+
+Stuck means the vehicle moved less than 0.2 m in the world plane for more than 120 steps. The check uses world position, so a lane change is not treated as standing still.
 
 ---
 
-## DQN Architecture
+## Training Pipeline
 
-The neural network approximates the action-value function:
+Run the stages in order. Each stage loads the checkpoint produced by the previous one.
 
-```math
-Q(s,a)
+```bash
+python collect_idm.py
+python -m train_bc
+python -m train_straight
+python -m train_curve
+python -m train
 ```
 
-The network consists of:
+`collect_idm.py` rolls out MetaDrive's IDM expert for 300 episodes: straight maps, then `SCSC` / `CSCS` / `CCCC`, then procedural maps. Transitions go to `dataset/expert_dataset.npz`. The stored action is the discrete bin that was executed.
 
-* 1D Convolutional encoder for LiDAR sensors
-* Linear projection for non-LiDAR information
-* GRU over the stacked-frame sequence
-* Seperate Value and Advantage heads for Double Dueling DQN
+`train_bc.py` imitates that dataset and writes `checkpoints/bc_pretrain_straight.pt`.
 
-The target network is periodically updated to improve training stability.
+`train_straight.py` trains on `SSSS` (horizon 800) and saves `checkpoints/best_straight.pt` when success improves. Target success is 0.90.
 
----
+`train_curve.py` loads the straight checkpoint and trains on `SCSC`, `CSCS`, and, after episode 800, `CCCC`. Horizons are 1000 and 1400. It saves `checkpoints/best_curve.pt`. Target success is 0.85.
 
-## Reward Function
+`train.py` loads the curve weights only. The optimizer and step counter start fresh, and exploration starts at ε = 0.08 (decay to 0.02 over 300 000 steps). Training uses procedural maps of 4 blocks (`map=4`), horizon 2000, and seeds 0–49.
 
-The reward function encourages safe and efficient driving behavior.
+### Block curriculum
 
-Positive rewards are given for:
+`map=4` samples four road blocks after the fixed first block. `train.py` changes which blocks can appear:
 
-* Forward progress along the route
-* Maintaining road position
-* Completing the route
+| Episodes | Blocks |
+|---|---|
+| 0–399 | Straight 0.35, Curve 0.65 |
+| 400–999 | Straight 0.15, Curve 0.35, intersection 0.25, T-intersection 0.25 |
+| 1000+ | MetaDrive default mix, including ramps and roundabouts |
 
-Negative rewards are applied for:
+Epsilon restarts when the block distribution changes. Every 40 episodes the run evaluates 10 greedy episodes on the full default mix, seeds 50–69, and saves `checkpoints/best_random.pt` when that success rate improves. Training stops at success 0.90 or at 4000 episodes. The same seeds can be drawn more than once in one evaluation, so the printed rate can double-count a map.
 
-* Collisions
-* Driving off the road
-* Excessive inactivity
-* Unstable driving behavior
+`EXPERT_RATIO_RANDOM` is 0. The existing expert file was labeled with the old reward. After a fresh `collect_idm.py`, raise it to 0.10–0.20 in `configs/env_config.py` to mix those transitions back in.
 
-Reward shaping is used to accelerate learning and improve convergence.
-
----
-
-## Training Process
-
-The training loop follows the standard DQN procedure:
-
-1. Observe current state.
-2. Select action using epsilon-greedy policy.
-3. Execute action in the environment.
-4. Store transition in replay buffer.
-5. Sample mini-batches from replay memory.
-6. Update online network.
-7. Periodically synchronize target network.
-8. Decay exploration rate.
+`python main.py` plays one greedy episode per map, loading `best_straight.pt`, `best_curve.pt`, or `best_random.pt`.
 
 ---
 
 ## Results
 
-The agent was evaluated on both training maps and previously unseen maps.
+On the fixed curve maps the agent reaches the curve-stage target. The checkpoint from that stage is `checkpoints/best_curve.pt`.
 
-Performance metrics include:
+Fine-tuning on procedural maps learned the straight-and-curve block mix first (about 78% of training episodes arrived in episodes 300–399), then junctions. Held-out success on the full block mix peaked at **0.80** on episode 599. That checkpoint is `checkpoints/best_random.pt`.
 
-* Episode reward
-* Success rate
-* Collision rate
-* Off-road rate
-* Average episode length
+From episode 1000 the trainer switched to the full mix, including ramps and roundabouts. Training arrivals fell from about 50% to roughly 10–20%, and later held-out scores stayed near 0.30. The replay buffer had already dropped the earlier successful transitions, so the live weights at the end of that run are worse than `best_random.pt`. Use the saved checkpoint, not `final.pt` from that run.
 
-The trained agent demonstrated the ability to generalize to new road configurations while maintaining a high route completion rate.
+Logs for the run are `logs/training_20261005_200429.csv` and `logs/evaluation_20261005_200429.csv`.
 
 ---
 
-## Technologies Used
+## Technologies
 
-* Python
+* Python 3.10
 * PyTorch
 * NumPy
-* OpenAI Gym-style environment
-* Matplotlib
-* Reinforcement Learning
+* MetaDrive 0.4.3
+* Gymnasium-style `reset` / `step` API
 
 ---
 
 ## Repository Structure
 
 ```text
-├── agent/
+├── agents/
 │   ├── dqn_agent.py
-│   ├── epsiolon_scheduler.py
+│   ├── epsilon_scheduler.py
 │   └── q_network.py
-│   
+├── configs/
+│   └── env_config.py
 ├── environment/
 │   ├── action_mapper.py
 │   ├── info_builder.py
 │   ├── metadrive_env.py
 │   ├── observation_builder.py
 │   └── reward_function.py
-│  
 ├── replay/
 │   └── expert_replay_buffer.py
-│   
 ├── training/
 │   ├── checkpoint_manager.py
 │   ├── curve_trainer.py
 │   ├── evaluator.py
 │   └── trainer.py
-│   
 ├── utils/
 │   ├── action_discretizer.py
 │   ├── frame_stack.py
 │   └── logger.py
-│
 ├── collect_idm.py
 ├── main.py
 ├── train.py
@@ -193,5 +173,4 @@ The trained agent demonstrated the ability to generalize to new road configurati
 
 ## Author
 
-Developed by **Danilo Nikić** as part of a Reinforcement Learning research and educational project.
-
+Developed by **Danilo Nikić** as part of a reinforcement learning seminar.

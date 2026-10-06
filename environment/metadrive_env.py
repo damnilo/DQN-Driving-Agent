@@ -21,7 +21,7 @@ class MetaDriveEnvWrapper:
         self.reward_function = RewardFunction()
 
         self.info_builder = InfoBuilder()
-        self.prev_longitudinal = None
+        self._prev_position = None
         self.stuck_step = 0
         
         self.obs_size: int = None
@@ -34,7 +34,7 @@ class MetaDriveEnvWrapper:
         observation size on the first call."""
 
         self._last_discrete_action = 0
-        self.prev_longitudinal = None
+        self._prev_position = None
         self.stuck_step = 0
 
         self.reward_function.reset()
@@ -90,20 +90,19 @@ class MetaDriveEnvWrapper:
         
         raw_obs, env_reward, terminated, truncated, info = self.env.step(continuous_action)
         info = self._enrich_info(info)
-        long = info.get("longitudinal", 0.0)
-        if self.prev_longitudinal is not None:
-            progress_delta = long - self.prev_longitudinal
-
-            if progress_delta < 0.05:
+        position = np.asarray(self.env.agent.position, dtype=np.float64)[:2]
+        if self._prev_position is not None:
+            moved = float(np.linalg.norm(position - self._prev_position))
+            if moved < 0.2:
                 self.stuck_step += 1
             else:
                 self.stuck_step = 0
-        
+
         if self.stuck_step > 120:
             terminated = True
             info["stuck"] = True
-        
-        self.prev_longitudinal = long
+
+        self._prev_position = position
         reward = self.reward_function.compute(info)
         processed_obs = self.observation_builder.build(self.env, raw_obs, info, prev_action_idx=self._last_discrete_action)
         future_features = self.get_future_waypoint_features()
@@ -124,65 +123,29 @@ class MetaDriveEnvWrapper:
         return angle
     
     def get_future_waypoint_features(self):
-        """Walks the lane chain ahead at [5, 10, 20, 35] m and returns 16 features:
-        per-waypoint heading difference, curvature, and vehicle-relative (x, y)
-        position."""
-         
+        """Samples the navigation route at [5, 10, 20, 35] m and returns 16 features:
+        per-waypoint heading difference, curvature, and vehicle-relative (x, y)."""
+
         vehicle = self.env.agent
-        lane = vehicle.lane
-
-        try:
-            long, _ = lane.local_coordinates(vehicle.position)
-        except Exception:
-            long = 0.0
-
         future_distances = [5, 10, 20, 35]
         features = []
 
         vehicle_heading = vehicle.heading_theta
-        vehicle_pos = np.array(vehicle.position)
+        vehicle_pos = np.array(vehicle.position)[:2]
 
         cos_h = np.cos(-vehicle_heading)
         sin_h = np.sin(-vehicle_heading)
         rotation = np.array([[cos_h, -sin_h], [sin_h, cos_h]])
 
+        route = self._route_lane_sequence(vehicle)
+
         for d in future_distances:
-            remaining = d
-            current_lane = lane
-            cur_long = long
-            found = False
-
             try:
-                while current_lane is not None and remaining >= 0:
-                    lane_length = float(getattr(current_lane, "length", 0.0) or 0.0)
-
-                    # distance available on this lane from cur_long to end
-                    avail = max(0.0, lane_length - cur_long)
-
-                    if remaining <= avail:
-                        # point lies on this lane
-                        future_world_pos = np.array(current_lane.position(cur_long + remaining, 0))
-                        future_heading = current_lane.heading_theta_at(cur_long + remaining)
-                        found = True
-                        break
-                    else:
-                        # advance to next lane
-                        remaining -= avail
-                        cur_long = 0.0
-                        # choose the next lane that best matches current heading
-                        next_lanes = getattr(current_lane, "next_lanes", None) or []
-                        if not next_lanes:
-                            current_lane = None
-                            break
-                        current_lane = self._select_best_lane(next_lanes, vehicle.heading_theta)
-
-                if not found:
-                    raise RuntimeError("Could not sample future point on lane chain")
-
+                future_world_pos, future_heading = self._sample_along_lanes(route, vehicle, d)
                 heading_diff = self.normalize_angle(future_heading - vehicle_heading) / np.pi
                 curvature = np.clip((heading_diff / max(d, 1.0)) * 10, -1, 1)
 
-                relative_world = (future_world_pos - vehicle_pos)
+                relative_world = future_world_pos - vehicle_pos
                 relative_local = rotation @ relative_world
 
                 local_x = np.clip(relative_local[0] / 40.0, -1.0, 1.0)
@@ -193,19 +156,96 @@ class MetaDriveEnvWrapper:
                 features.extend([0.0, 0.0, 0.0, 0.0])
 
         return np.array(features, dtype=np.float32)
-    
-    def _select_best_lane(self, lanes, heading):
-        """Picks the next-lane candidate whose initial heading most closely matches
-        the given heading, used to trace the most plausible route through junctions."""
 
-        best, best_diff = lanes[0], float("inf")
-        
+    def _route_lane_sequence(self, vehicle):
+        """Ordered lanes along the navigation checkpoints, starting from the road
+        the vehicle is on. Falls back to the vehicle lane when navigation is missing."""
+
+        nav = getattr(vehicle, "navigation", None)
+        checkpoints = getattr(nav, "checkpoints", None) if nav is not None else None
+        if not checkpoints or len(checkpoints) < 2:
+            return [vehicle.lane]
+
+        graph = nav.map.road_network.graph
+        start = int(nav._target_checkpoints_index[0])
+        sequence = []
+        previous = None
+
+        for i in range(start, len(checkpoints) - 1):
+            road_lanes = list(graph[checkpoints[i]][checkpoints[i + 1]])
+            if not road_lanes:
+                break
+            if previous is None:
+                chosen = self._closest_lane(vehicle, road_lanes)
+            else:
+                chosen = self._connected_lane(previous, road_lanes) or road_lanes[0]
+            sequence.append(chosen)
+            previous = chosen
+
+        return sequence or [vehicle.lane]
+
+    def _sample_along_lanes(self, lanes, vehicle, distance):
+        """Walks `distance` metres forward along `lanes` and returns world position
+        and lane heading at that point."""
+
+        current = lanes[0]
+        try:
+            long, _ = current.local_coordinates(vehicle.position)
+        except Exception:
+            long = 0.0
+        long = float(np.clip(long, 0.0, float(getattr(current, "length", 0.0) or 0.0)))
+
+        remaining = distance
+        index = 0
+        hops = 0
+        while current is not None and remaining >= 0 and hops < 16:
+            hops += 1
+            lane_length = float(getattr(current, "length", 0.0) or 0.0)
+            available = max(0.0, lane_length - long)
+            if remaining <= available:
+                point = np.asarray(current.position(long + remaining, 0), dtype=np.float64)[:2]
+                heading = float(current.heading_theta_at(long + remaining))
+                return point, heading
+
+            remaining -= available
+            long = 0.0
+            index += 1
+            if index < len(lanes):
+                current = lanes[index]
+                continue
+
+            nxt = list(getattr(current, "next_lanes", None) or [])
+            current = self._connected_lane(current, nxt) if nxt else None
+            if current is None and nxt:
+                current = nxt[0]
+
+        raise RuntimeError("Could not sample future point on the route")
+
+    def _closest_lane(self, vehicle, lanes):
+        best, best_lat = lanes[0], float("inf")
         for lane in lanes:
             try:
-                diff = abs(self.normalize_angle(lane.heading_theta_at(0) - heading))
-                if diff < best_diff:
-                    best, best_diff = lane, diff
+                _, lat = lane.local_coordinates(vehicle.position)
+                if abs(lat) < best_lat:
+                    best, best_lat = lane, abs(lat)
             except Exception:
                 pass
-
         return best
+
+    def _connected_lane(self, lane, candidates):
+        """Returns the candidate that continues `lane` along the road graph."""
+
+        if lane is None or not candidates:
+            return None
+        nxt = list(getattr(lane, "next_lanes", None) or [])
+        nxt_keys = {self._lane_key(item) for item in nxt}
+        for candidate in candidates:
+            if candidate in nxt or self._lane_key(candidate) in nxt_keys:
+                return candidate
+        return None
+
+    def _lane_key(self, lane):
+        index = getattr(lane, "index", None)
+        if index is None:
+            return id(lane)
+        return tuple(index)

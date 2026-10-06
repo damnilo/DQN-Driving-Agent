@@ -32,13 +32,23 @@ CURVE_TRAIN_CONFIG = {
     "gamma": 0.99,
     "lr": 5e-5,
     "replay_capacity": 150_000,
-    "min_replay_size": 10_000,
+    "min_replay_size": 2_000,
     "target_update_freq": None
 }
 
 EXPERT_RATIO = 0.0
 EXPERT_RATIO_CURVE = 0.10
+# Existing expert_dataset.npz was labeled with the lane-local reward. Leave this at 0
+# until collect_idm.py is run again, then raise it (0.10-0.20) to mix those transitions.
+EXPERT_RATIO_RANDOM = 0.0
 EXPERT_DATASET = "dataset/expert_dataset.npz"
+
+RANDOM_EPSILON_CONFIG = {
+    "start": 0.08,
+    "end": 0.02,
+    "decay": 300_000,
+    "warmup_steps": 2_000
+}
 
 EVAL_EPISODES_PER_MAP = 10
 
@@ -78,3 +88,47 @@ STRAIGHT_BC_CONFIG = {
     "patience": 20,
     "clip_grad": 0.5
 }
+
+
+class _RouteBlockDist:
+    """MetaDrive block distribution used while `map` is an integer block count."""
+
+    MIN_LANE_NUM = 1
+    MAX_LANE_NUM = 5
+    DISTRIBUTION = {}
+
+    @classmethod
+    def all_blocks(cls, version="v2"):
+        return list(cls.DISTRIBUTION)
+
+    @classmethod
+    def block_probability(cls, version="v2"):
+        weights = list(cls.DISTRIBUTION.values())
+        total = sum(weights) or 1.0
+        return [weight / total for weight in weights]
+
+    @classmethod
+    def get_block(cls, block_id, version="v2"):
+        from metadrive.component.algorithm.blocks_prob_dist import PGBlockDistConfig
+        return PGBlockDistConfig.get_block(block_id, version)
+
+
+class StraightCurveBlockDist(_RouteBlockDist):
+    DISTRIBUTION = {"Straight": 0.35, "Curve": 0.65}
+
+
+class JunctionBlockDist(_RouteBlockDist):
+    DISTRIBUTION = {
+        "Straight": 0.15,
+        "Curve": 0.35,
+        "StdInterSection": 0.25,
+        "StdTInterSection": 0.25,
+    }
+
+
+# (start_episode, block distribution or None for MetaDrive's default mix)
+RANDOM_CURRICULUM = [
+    (0, StraightCurveBlockDist),
+    (400, JunctionBlockDist),
+    (1000, None),
+]

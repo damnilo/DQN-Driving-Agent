@@ -61,21 +61,24 @@ class Trainer:
             next_state, reward, terminated, truncated, info = self.env.step(action)
             next_state = self.frame_stack.step(next_state)
 
-            done = terminated or truncated
+            episode_reward += reward
+            self.global_step += 1
+            early_exit = (
+                steps >= self.MIN_STEPS_BEFORE_EXIT
+                and episode_reward < self.EARLY_EXIT_THRESHOLD
+                and self.global_step > 300
+            )
+            done = terminated or truncated or early_exit
 
             self.replay_buffer.push(
                 state,
                 action,
                 reward,
                 next_state,
-                done 
+                done
             )
 
             state = next_state
-
-            episode_reward += reward
-
-            self.global_step += 1
 
             if self.replay_buffer.is_ready(self.config["min_replay_size"]):
 
@@ -90,9 +93,8 @@ class Trainer:
             for target_param, online_param in zip(self.agent.target_net.parameters(), self.agent.online_net.parameters()):
                 target_param.data.copy_(tau * online_param.data + (1.0 - tau) * target_param.data)
 
-            if steps >= self.MIN_STEPS_BEFORE_EXIT and episode_reward < self.EARLY_EXIT_THRESHOLD and self.global_step > 300:
+            if early_exit and not (terminated or truncated):
                 print("[Trainer] Epizoda zavrsena ranije zbog loseg ucenja...")
-                done = True
 
             steps += 1
         

@@ -7,6 +7,7 @@ class CurveTrainer(Trainer):
 
     def __init__(self, env, agent, optimizer, replay_buffer, config, logger):
         super().__init__(env=env, agent=agent, optimizer=optimizer, replay_buffer=replay_buffer, config=config, logger=logger, scheduler=None)
+        self._epsilon_origin = 0
 
     def run_episode(self, episode):
         """Extends the base run_episode with an early-exit condition that terminates
@@ -14,6 +15,7 @@ class CurveTrainer(Trainer):
         MIN_STEPS_BEFORE_EXIT steps."""
         
         start_step = self.global_step
+        epsilon_step = start_step - self._epsilon_origin
         state, _ = self.env.reset()
         state = self.frame_stack.reset(state)
 
@@ -23,17 +25,23 @@ class CurveTrainer(Trainer):
         steps = 0
 
         while not done:
-            action = self.agent.select_action(state, self.global_step, training=True)
+            action = self.agent.select_action(
+                state, self.global_step - self._epsilon_origin, training=True
+            )
 
             next_state, reward, terminated, truncated, _ = self.env.step(action)
             next_state = self.frame_stack.step(next_state)
 
-            done = terminated or truncated
+            episode_reward += reward
+            self.global_step += 1
+            early_exit = (
+                steps >= self.MIN_STEPS_BEFORE_EXIT
+                and episode_reward < self.EARLY_EXIT_THRESHOLD
+            )
+            done = terminated or truncated or early_exit
 
             self.replay_buffer.push(state, action, reward, next_state, done)
             state = next_state
-            episode_reward += reward
-            self.global_step += 1
 
             if self.replay_buffer.is_ready(self.config["min_replay_size"]):
                 batch = self.replay_buffer.sample(self.config["batch_size"])
@@ -44,8 +52,8 @@ class CurveTrainer(Trainer):
             for tp, op in zip(self.agent.target_net.parameters(), self.agent.online_net.parameters()):
                 tp.data.copy_(tau * op.data + (1.0 - tau) * tp.data)
 
-            if steps >= self.MIN_STEPS_BEFORE_EXIT and episode_reward < self.EARLY_EXIT_THRESHOLD:
-                done = True
+            if early_exit and not (terminated or truncated):
+                print("[Trainer] Epizoda zavrsena ranije zbog loseg ucenja...")
 
             steps += 1
 
@@ -53,7 +61,7 @@ class CurveTrainer(Trainer):
         self.logger.log_episode(
             episode=episode,
             reward=episode_reward,
-            epsilon=self.agent.epsilon_scheduler.get_epsilon(start_step),
+            epsilon=self.agent.epsilon_scheduler.get_epsilon(epsilon_step),
             avg_loss = avg_loss,
             global_step = self.global_step,
             steps = steps

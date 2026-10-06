@@ -26,7 +26,7 @@ class ExpertReplayBuffer:
     BETA_INCREMENT = 1e-6
     EPS = 1e-5
 
-    def __init__(self, capacity: int, expert_dataset_path: str, num_actions: int, expert_ratio: float = 0.25, map_filter=None):
+    def __init__(self, capacity: int, expert_dataset_path: str, num_actions: int, expert_ratio: float = 0.25, map_filter=None, expected_obs_size=None):
         """Initialises the circular agent buffer and loads expert transitions from the
         .npz dataset, optionally restricting to a subset of maps."""
 
@@ -34,6 +34,7 @@ class ExpertReplayBuffer:
         self.capacity = capacity
         self.num_actions = num_actions
         self.expert_ratio = expert_ratio
+        self.expected_obs_size = expected_obs_size
 
         self.beta = self.BETA
         self._agent_buffer: list = []
@@ -89,11 +90,16 @@ class ExpertReplayBuffer:
             maps_all = np.array(cleaned)
 
         transitions = []
+        skipped_shape = 0
 
         for i in range(len(obs_all)):
             maps_str = str(maps_all[i])
 
             if map_filter and maps_str not in map_filter:
+                continue
+
+            if self.expected_obs_size is not None and len(obs_all[i]) != self.expected_obs_size:
+                skipped_shape += 1
                 continue
 
             discrete_action = discretize_action(float(actions_all[i][0]), float(actions_all[i][1]))
@@ -102,6 +108,11 @@ class ExpertReplayBuffer:
 
         self._expert_buffer = transitions
         print(f"[ExpertReplayBuffer] Ucitano {len(self._expert_buffer)} ekspertskih tranzicija")
+        if skipped_shape:
+            print(
+                f"[ExpertReplayBuffer] Preskoceno {skipped_shape} tranzicija "
+                f"jer ops dimenzija nije {self.expected_obs_size}. Pokreni collect_idm.py ponovo."
+            )
 
     def push(self, obs, action, reward, next_obs, done):
         """Inserts a new transition into the circular agent buffer at the current
